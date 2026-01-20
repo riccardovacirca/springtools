@@ -1,57 +1,6 @@
-# Configurazione locale
-.env
-
-# Progetto generato dall'archetipo (ma non l'archetype stesso)
-/pom.xml
-/src/
-/gui/
-/bin/
-/mvnw
-/mvnw.cmd
-/.mvn/
-
-# Maven
-target/
-dependency-reduced-pom.xml
-.mvn/timing.properties
-.mvn/wrapper/maven-wrapper.jar
-
-# Java
-*.class
-*.log
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
-
-# IDE
-.idea/
-.vscode/
-*.iml
-*.ipr
-*.iws
-.settings/
-.classpath
-.project
-
-# Node/Vite
-node_modules/
-dist/
-.DS_Store
-
-# Database
-data/
-*.db
-*.db-journal
-*.db-shm
-*.db-wal
-
-# Spring Boot
-app.log
-.app.pid
-
-# Build output dell'archetipo
-archetype/target/
+*
+!archetype
+!archetype/**
+!install.sh
+!.gitignore
+!README.md

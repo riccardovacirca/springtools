@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 set -e
 
 ARCHETYPE_DIR="archetype"
@@ -50,7 +50,7 @@ GIT_USER=
 GIT_EMAIL=
 GIT_TOKEN=
 EOF
-    sed -i "s|PROJECT_DIR_PLACEHOLDER|$project_dir|g" .env
+    sed -i '' "s|PROJECT_DIR_PLACEHOLDER|$project_dir|g" .env
     echo "File .env generato con configurazione di default"
 }
 
@@ -174,6 +174,12 @@ fi
 
 echo "Installazione dipendenze Svelte..."
 docker exec "$DEV_CONTAINER" bash -c "cd gui && npm install >/dev/null 2>&1"
+
+echo "Configurazione comando cmd..."
+docker exec "$DEV_CONTAINER" bash -c "
+    chmod +x /usr/src/app/bin/cmd
+    ln -sf /usr/src/app/bin/cmd /usr/local/bin/cmd
+"
 
 echo ""
 echo "=========================================="
