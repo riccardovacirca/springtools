@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<archetype-descriptor
+    xmlns="http://maven.apache.org/plugins/maven-archetype-plugin/archetype-descriptor/1.1.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/plugins/maven-archetype-plugin/archetype-descriptor/1.1.0
+    http://maven.apache.org/xsd/archetype-descriptor-1.1.0.xsd"
+    name="spring-svelte-archetype">
+
+    <requiredProperties>
+        <requiredProperty key="groupId">
+            <defaultValue>com.example</defaultValue>
+        </requiredProperty>
+        <requiredProperty key="artifactId">
+            <defaultValue>myapp</defaultValue>
+        </requiredProperty>
+        <requiredProperty key="version">
+            <defaultValue>0.0.1-SNAPSHOT</defaultValue>
+        </requiredProperty>
+        <requiredProperty key="package">
+            <defaultValue>${groupId}</defaultValue>
+        </requiredProperty>
+    </requiredProperties>
+
+    <fileSets>
+        <!-- File root con filtering (sostituisce placeholder) -->
+        <fileSet filtered="true" packaged="false">
+            <directory></directory>
+            <includes>
+                <include>pom.xml</include>
+                <include>.gitignore</include>
+                <include>README.md</include>
+            </includes>
+        </fileSet>
+
+        <!-- Maven wrapper e script (senza filtering) -->
+        <fileSet filtered="false" packaged="false">
+            <directory></directory>
+            <includes>
+                <include>mvnw</include>
+                <include>mvnw.cmd</include>
+                <include>release.sh</include>
+            </includes>
+        </fileSet>
+
+        <fileSet filtered="false" packaged="false">
+            <directory>.mvn</directory>
+            <includes>
+                <include>**/*</include>
+            </includes>
+        </fileSet>
+
+        <!-- Sorgenti Java (con filtering e packaging) -->
+        <fileSet filtered="true" packaged="true">
+            <directory>src/main/java</directory>
+            <includes>
+                <include>**/*.java</include>
+            </includes>
+        </fileSet>
+
+        <!-- Test Java (con filtering e packaging) -->
+        <fileSet filtered="true" packaged="true">
+            <directory>src/test/java</directory>
+            <includes>
+                <include>**/*.java</include>
+            </includes>
+        </fileSet>
+
+        <!-- Resources (con filtering) -->
+        <fileSet filtered="true" packaged="false">
+            <directory>src/main/resources</directory>
+            <includes>
+                <include>**/*.properties</include>
+                <include>**/*.sql</include>
+                <include>**/*.html</include>
+            </includes>
+        </fileSet>
+
+        <!-- Script bin (senza filtering) -->
+        <fileSet filtered="false" packaged="false">
+            <directory>bin</directory>
+            <includes>
+                <include>**/*</include>
+            </includes>
+        </fileSet>
+
+        <!-- GUI Svelte (con filtering per file config) -->
+        <fileSet filtered="true" packaged="false">
+            <directory>gui</directory>
+            <includes>
+                <include>package.json</include>
+                <include>vite.config.js</include>
+                <include>**/*.json</include>
+            </includes>
+        </fileSet>
+
+        <!-- GUI Svelte sorgenti (senza filtering) -->
+        <fileSet filtered="false" packaged="false">
+            <directory>gui</directory>
+            <includes>
+                <include>src/**/*</include>
+                <include>static/**/*</include>
+            </includes>
+        </fileSet>
+
+        <!-- Cartelle data e logs -->
+        <fileSet filtered="false" packaged="false">
+            <directory>data</directory>
+            <includes>
+                <include>.gitkeep</include>
+            </includes>
+        </fileSet>
+
+        <fileSet filtered="false" packaged="false">
+            <directory>logs</directory>
+            <includes>
+                <include>.gitkeep</include>
+            </includes>
+        </fileSet>
+    </fileSets>
+</archetype-descriptor>

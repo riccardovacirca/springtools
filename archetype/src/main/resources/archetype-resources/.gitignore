@@ -1,18 +1,12 @@
-# Configurazione locale
-.env
-
-# Progetto generato dall'archetipo (ma non l'archetype stesso)
-/pom.xml
-/src/
-/gui/
-/bin/
-/mvnw
-/mvnw.cmd
-/.mvn/
-
 # Maven
 target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
 dependency-reduced-pom.xml
+buildNumber.properties
 .mvn/timing.properties
 .mvn/wrapper/maven-wrapper.jar
 
@@ -26,6 +20,7 @@ dependency-reduced-pom.xml
 *.zip
 *.tar.gz
 *.rar
+hs_err_pid*
 
 # IDE
 .idea/
@@ -37,10 +32,12 @@ dependency-reduced-pom.xml
 .classpath
 .project
 
-# Node/Vite
+# Node/Svelte/Vite
 node_modules/
 dist/
 .DS_Store
+gui/node_modules/
+gui/dist/
 
 # Database
 data/
@@ -50,8 +47,9 @@ data/
 *.db-wal
 
 # Spring Boot
+.springtools/
 app.log
 .app.pid
 
-# Build output dell'archetipo
-archetype/target/
+# Env
+.env.local
