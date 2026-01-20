@@ -4,3 +4,5 @@
 !install.sh
 !.gitignore
 !README.md
+archetype/target/
+archetype/target/**
