@@ -77,8 +77,8 @@ PGSQL_JDBC_URL=jdbc:postgresql://PROJECT_DIR_PLACEHOLDER-postgres:5432/appdb
 EOF
 
     # sostituzioni compatibili sh
-    sed -i "s|PROJECT_DIR_PLACEHOLDER|$project_dir|g" .env
-    sed -i "s|GROUP_ID_PLACEHOLDER|dev.$project_dir|g" .env
+    sed "s|PROJECT_DIR_PLACEHOLDER|$project_dir|g" .env > .env.tmp && mv .env.tmp .env
+    sed "s|GROUP_ID_PLACEHOLDER|dev.$project_dir|g" .env > .env.tmp && mv .env.tmp .env
 
     echo "File .env generato con configurazione di default"
 }
@@ -257,14 +257,14 @@ configure_mariadb_properties() {
     echo "  Configurazione application.properties per MariaDB..."
 
     # Comment out SQLite configuration
-    sed -i 's/^spring\.datasource\.url=jdbc:sqlite:/#spring.datasource.url=jdbc:sqlite:/' "$PROPS_FILE"
-    sed -i 's/^spring\.datasource\.driver-class-name=org\.sqlite\.JDBC/#spring.datasource.driver-class-name=org.sqlite.JDBC/' "$PROPS_FILE"
+    sed 's/^spring\.datasource\.url=jdbc:sqlite:/#spring.datasource.url=jdbc:sqlite:/' "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
+    sed 's/^spring\.datasource\.driver-class-name=org\.sqlite\.JDBC/#spring.datasource.driver-class-name=org.sqlite.JDBC/' "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
 
     # Uncomment MariaDB configuration
-    sed -i "s|^#spring\.datasource\.url=jdbc:mariadb://.*|spring.datasource.url=jdbc:mariadb://$MARIADB_CONTAINER:3306/$MARIADB_NAME|" "$PROPS_FILE"
-    sed -i 's/^#spring\.datasource\.driver-class-name=org\.mariadb\.jdbc\.Driver/spring.datasource.driver-class-name=org.mariadb.jdbc.Driver/' "$PROPS_FILE"
-    sed -i "s/^#spring\.datasource\.username=appuser/spring.datasource.username=$MARIADB_USER/" "$PROPS_FILE"
-    sed -i "s/^#spring\.datasource\.password=apppass/spring.datasource.password=$MARIADB_PASSWORD/" "$PROPS_FILE"
+    sed "s|^#spring\.datasource\.url=jdbc:mariadb://.*|spring.datasource.url=jdbc:mariadb://$MARIADB_CONTAINER:3306/$MARIADB_NAME|" "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
+    sed 's/^#spring\.datasource\.driver-class-name=org\.mariadb\.jdbc\.Driver/spring.datasource.driver-class-name=org.mariadb.jdbc.Driver/' "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
+    sed "s/^#spring\.datasource\.username=appuser/spring.datasource.username=$MARIADB_USER/" "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
+    sed "s/^#spring\.datasource\.password=apppass/spring.datasource.password=$MARIADB_PASSWORD/" "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
 
     echo "  application.properties configurato per MariaDB"
 }
@@ -281,14 +281,14 @@ configure_pgsql_properties() {
     echo "  Configurazione application.properties per PostgreSQL..."
 
     # Comment out SQLite configuration
-    sed -i 's/^spring\.datasource\.url=jdbc:sqlite:/#spring.datasource.url=jdbc:sqlite:/' "$PROPS_FILE"
-    sed -i 's/^spring\.datasource\.driver-class-name=org\.sqlite\.JDBC/#spring.datasource.driver-class-name=org.sqlite.JDBC/' "$PROPS_FILE"
+    sed 's/^spring\.datasource\.url=jdbc:sqlite:/#spring.datasource.url=jdbc:sqlite:/' "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
+    sed 's/^spring\.datasource\.driver-class-name=org\.sqlite\.JDBC/#spring.datasource.driver-class-name=org.sqlite.JDBC/' "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
 
     # Uncomment PostgreSQL configuration
-    sed -i "s|^#spring\.datasource\.url=jdbc:postgresql://.*|spring.datasource.url=jdbc:postgresql://$PGSQL_CONTAINER:5432/$PGSQL_NAME|" "$PROPS_FILE"
-    sed -i 's/^#spring\.datasource\.driver-class-name=org\.postgresql\.Driver/spring.datasource.driver-class-name=org.postgresql.Driver/' "$PROPS_FILE"
-    sed -i "s/^#spring\.datasource\.username=appuser/spring.datasource.username=$PGSQL_USER/" "$PROPS_FILE"
-    sed -i "s/^#spring\.datasource\.password=apppass/spring.datasource.password=$PGSQL_PASSWORD/" "$PROPS_FILE"
+    sed "s|^#spring\.datasource\.url=jdbc:postgresql://.*|spring.datasource.url=jdbc:postgresql://$PGSQL_CONTAINER:5432/$PGSQL_NAME|" "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
+    sed 's/^#spring\.datasource\.driver-class-name=org\.postgresql\.Driver/spring.datasource.driver-class-name=org.postgresql.Driver/' "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
+    sed "s/^#spring\.datasource\.username=appuser/spring.datasource.username=$PGSQL_USER/" "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
+    sed "s/^#spring\.datasource\.password=apppass/spring.datasource.password=$PGSQL_PASSWORD/" "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
 
     echo "  application.properties configurato per PostgreSQL"
 }
