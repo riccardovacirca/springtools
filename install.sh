@@ -5,8 +5,8 @@ ARCHETYPE_DIR="archetype"
 
 # Funzione per generare .env se non esiste
 generate_env_file() {
-    local project_dir=$(basename "$PWD")
-    cat > .env << 'EOF'
+    project_dir=$(basename "$PWD")
+    cat > .env << EOF
 # Configurazione Progetto Spring Boot
 # Generato automaticamente da install.sh
 
@@ -49,9 +49,37 @@ REL_JRE_IMAGE=eclipse-temurin:21-jre
 GIT_USER=
 GIT_EMAIL=
 GIT_TOKEN=
+
+# ========================================
+# Database Containers
+# ========================================
+# MariaDB
+MARIADB_ENABLED=n
+MARIADB_IMAGE=mariadb:latest
+MARIADB_PORT=2330
+MARIADB_ROOT_USER=root
+MARIADB_ROOT_PASSWORD=root
+MARIADB_NAME=appdb
+MARIADB_USER=appuser
+MARIADB_PASSWORD=apppass
+MARIADB_JDBC_URL=jdbc:mariadb://PROJECT_DIR_PLACEHOLDER-mariadb:3306/appdb
+
+# PostgreSQL
+PGSQL_ENABLED=n
+PGSQL_IMAGE=postgres:latest
+PGSQL_PORT=2340
+PGSQL_ROOT_USER=postgres
+PGSQL_ROOT_PASSWORD=postgres
+PGSQL_NAME=appdb
+PGSQL_USER=appuser
+PGSQL_PASSWORD=apppass
+PGSQL_JDBC_URL=jdbc:postgresql://PROJECT_DIR_PLACEHOLDER-postgres:5432/appdb
 EOF
-    sed -i '' "s|PROJECT_DIR_PLACEHOLDER|$project_dir|g" .env
-    sed -i '' "s|GROUP_ID_PLACEHOLDER|dev.$project_dir|g" .env
+
+    # sostituzioni compatibili sh
+    sed -i "s|PROJECT_DIR_PLACEHOLDER|$project_dir|g" .env
+    sed -i "s|GROUP_ID_PLACEHOLDER|dev.$project_dir|g" .env
+
     echo "File .env generato con configurazione di default"
 }
 
@@ -77,28 +105,129 @@ if [ ! -f .env ]; then
     exit 0
 fi
 
-# Carica variabili da .env
-set -a
-source .env
-set +a
-
+# Carica variabili da .env (sh compatibile)
+. ./.env
 echo "Configurazione caricata da .env"
 
 # Variabili derivate per sviluppo
 DEV_NETWORK="$PROJECT_NAME$DEV_NETWORK_SUFFIX"
 DEV_CONTAINER="$PROJECT_NAME-dev"
 
+# Variabili derivate per database containers
+MARIADB_CONTAINER="$PROJECT_NAME-mariadb"
+MARIADB_VOLUME="$PROJECT_NAME-mariadb-data"
+PGSQL_CONTAINER="$PROJECT_NAME-postgres"
+PGSQL_VOLUME="$PROJECT_NAME-postgres-data"
+
+# Creates MariaDB container
+# - Network: ${DEV_NETWORK} (<project>-dev)
+# - Container: ${MARIADB_CONTAINER} (<project>-mariadb)
+# - Volume: ${MARIADB_VOLUME} (<project>-mariadb-data)
+# - Port: ${MARIADB_PORT}:3306 (default 2330:3306)
+# - Database: ${MARIADB_NAME}, User: ${MARIADB_USER}
+# - Starts existing container if present
+create_mariadb_container() {
+    if ! docker network ls --format "{{.Name}}" | grep -q "^${DEV_NETWORK}$"; then
+        docker network create "$DEV_NETWORK" >/dev/null 2>&1 || true
+    fi
+
+    if docker ps -a --format "{{.Names}}" | grep -q "^${MARIADB_CONTAINER}$"; then
+        if docker ps --format "{{.Names}}" | grep -q "^${MARIADB_CONTAINER}$"; then
+            echo "MariaDB container già in esecuzione."
+            return 0
+        fi
+        docker start "$MARIADB_CONTAINER" >/dev/null 2>&1 || {
+            echo "Errore nell'avvio del container MariaDB."
+            return 1
+        }
+        echo "Container MariaDB avviato."
+        return 0
+    fi
+
+    if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${MARIADB_IMAGE}$"; then
+        echo "Download immagine MariaDB..."
+        docker pull "$MARIADB_IMAGE" >/dev/null 2>&1
+    fi
+
+    echo "Creazione container MariaDB..."
+    docker run -d --name "$MARIADB_CONTAINER" --network "$DEV_NETWORK" \
+        -e MYSQL_ROOT_PASSWORD="$MARIADB_ROOT_PASSWORD" \
+        -e MYSQL_DATABASE="$MARIADB_NAME" \
+        -e MYSQL_USER="$MARIADB_USER" \
+        -e MYSQL_PASSWORD="$MARIADB_PASSWORD" \
+        -p "$MARIADB_PORT:3306" \
+        -v "$MARIADB_VOLUME:/var/lib/mysql" \
+        "$MARIADB_IMAGE" >/dev/null 2>&1 || {
+            echo "Errore nella creazione del container MariaDB."
+            return 1
+        }
+
+    echo "Container MariaDB creato e avviato."
+    echo "  Host: localhost:$MARIADB_PORT"
+    echo "  Database: $MARIADB_NAME"
+    echo "  User: $MARIADB_USER"
+    echo "  Password: $MARIADB_PASSWORD"
+}
+
+# Creates PostgreSQL container
+# - Network: ${DEV_NETWORK} (<project>-dev)
+# - Container: ${PGSQL_CONTAINER} (<project>-postgres)
+# - Volume: ${PGSQL_VOLUME} (<project>-postgres-data)
+# - Port: ${PGSQL_PORT}:5432 (default 2340:5432)
+# - Credentials: user=postgres, password=postgres
+# - Starts existing container if present
+create_pgsql_container() {
+    if ! docker network ls --format "{{.Name}}" | grep -q "^${DEV_NETWORK}$"; then
+        docker network create "$DEV_NETWORK" >/dev/null 2>&1 || true
+    fi
+
+    if docker ps -a --format "{{.Names}}" | grep -q "^${PGSQL_CONTAINER}$"; then
+        if docker ps --format "{{.Names}}" | grep -q "^${PGSQL_CONTAINER}$"; then
+            echo "PostgreSQL container già in esecuzione."
+            return 0
+        fi
+        docker start "$PGSQL_CONTAINER" >/dev/null 2>&1 || {
+            echo "Errore nell'avvio del container PostgreSQL."
+            return 1
+        }
+        echo "Container PostgreSQL avviato."
+        return 0
+    fi
+
+    if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${PGSQL_IMAGE}$"; then
+        echo "Download immagine PostgreSQL..."
+        docker pull "$PGSQL_IMAGE" >/dev/null 2>&1
+    fi
+
+    echo "Creazione container PostgreSQL..."
+    docker run -d --name "$PGSQL_CONTAINER" --network "$DEV_NETWORK" \
+        -e POSTGRES_USER="$PGSQL_ROOT_USER" \
+        -e POSTGRES_PASSWORD="$PGSQL_ROOT_PASSWORD" \
+        -p "$PGSQL_PORT:5432" \
+        -v "$PGSQL_VOLUME:/var/lib/postgresql" \
+        "$PGSQL_IMAGE" >/dev/null 2>&1 || {
+            echo "Errore nella creazione del container PostgreSQL."
+            return 1
+        }
+
+    echo "Container PostgreSQL creato e avviato."
+    echo "  Host: localhost:$PGSQL_PORT"
+    echo "  User: $PGSQL_ROOT_USER"
+    echo "  Password: $PGSQL_ROOT_PASSWORD"
+}
+
 # Gestione opzione --origin
 if [ "$1" = "--origin" ]; then
     echo "Clonazione repository originale..."
-    if [ -n "$(ls -A . | grep -v '^\.env$' | grep -v '^install\.sh$')" ]; then
+    if [ -n "$(ls -A | grep -v '^\.env$' | grep -v '^install\.sh$')" ]; then
         echo "ATTENZIONE: La cartella corrente non è vuota."
         echo "Il clone potrebbe sovrascrivere file esistenti."
-        read -p "Continuare? (s/n): " confirm
-        if [ "$confirm" != "s" ] && [ "$confirm" != "S" ]; then
-            echo "Operazione annullata."
-            exit 0
-        fi
+        echo -n "Continuare? (s/n): "
+        read confirm
+        case "$confirm" in
+            s|S) ;;
+            *) echo "Operazione annullata."; exit 0;;
+        esac
     fi
 
     git clone https://github.com/riccardovacirca/springtools.git .
@@ -108,9 +237,25 @@ if [ "$1" = "--origin" ]; then
     echo "=========================================="
     echo ""
     echo "Puoi ora eseguire:"
-    echo "  ./install.sh          # Per creare il container"
-    echo "  ./install.sh --dev    # Per generare l'applicazione"
+    echo "  ./install.sh             # Per creare il container"
+    echo "  ./install.sh --dev       # Per generare l'applicazione"
+    echo "  ./install.sh --mariadb   # Per creare container MariaDB"
+    echo "  ./install.sh --postgres  # Per creare container PostgreSQL"
     echo ""
+    exit 0
+fi
+
+# Gestione opzione --mariadb
+if [ "$1" = "--mariadb" ]; then
+    echo "Configurazione container MariaDB..."
+    create_mariadb_container
+    exit 0
+fi
+
+# Gestione opzione --postgres
+if [ "$1" = "--postgres" ]; then
+    echo "Configurazione container PostgreSQL..."
+    create_pgsql_container
     exit 0
 fi
 
@@ -148,7 +293,10 @@ if [ "$1" != "--dev" ]; then
     fi
 
     echo ""
-    echo "Esegui './install.sh --dev' per generare l'applicazione Spring Boot dall'archetipo."
+    echo "Comandi disponibili:"
+    echo "  ./install.sh --dev        # Genera l'applicazione Spring Boot dall'archetipo"
+    echo "  ./install.sh --mariadb    # Crea container MariaDB"
+    echo "  ./install.sh --postgres   # Crea container PostgreSQL"
     exit 0
 fi
 
@@ -166,13 +314,13 @@ if [ -f pom.xml ]; then
 fi
 
 echo "Installazione dipendenze nel container..."
-docker exec "$DEV_CONTAINER" bash -c "apt-get update -qq && apt-get install -y -qq sqlite3 git rsync > /dev/null 2>&1"
+docker exec "$DEV_CONTAINER" sh -c "apt-get update -qq && apt-get install -y -qq sqlite3 git rsync >/dev/null 2>&1"
 
 echo "Installazione archetipo nel repository Maven locale..."
 docker exec "$DEV_CONTAINER" mvn -f "$ARCHETYPE_DIR/pom.xml" clean install -q
 
 echo "Generazione applicazione Spring Boot dall'archetipo..."
-docker exec "$DEV_CONTAINER" bash -c "
+docker exec "$DEV_CONTAINER" sh -c "
     mvn archetype:generate \
         -DarchetypeGroupId=dev.springtools \
         -DarchetypeArtifactId=spring-svelte-archetype \
@@ -185,58 +333,119 @@ docker exec "$DEV_CONTAINER" bash -c "
         -B
 
     # Sposta i file generati dalla sottocartella alla root
-    shopt -s dotglob
-    mv $PROJECT_NAME/* . 2>/dev/null || true
+    for f in $PROJECT_NAME/*; do
+        [ -e \"\$f\" ] && mv \"\$f\" .
+    done
     rmdir $PROJECT_NAME 2>/dev/null || true
 "
 
 echo "Installazione Node.js nel container..."
-if ! docker exec "$DEV_CONTAINER" bash -c "command -v node >/dev/null 2>&1"; then
-    docker exec "$DEV_CONTAINER" bash -c "
-        curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
+docker exec "$DEV_CONTAINER" sh -c "
+    if ! command -v node >/dev/null 2>&1; then
+        curl -fsSL https://deb.nodesource.com/setup_20.x | sh - >/dev/null 2>&1
         apt-get install -y nodejs >/dev/null 2>&1
-    "
-    echo "Node.js installato: $(docker exec "$DEV_CONTAINER" node --version)"
-fi
+    fi
+"
 
 echo "Installazione dipendenze Svelte..."
-docker exec "$DEV_CONTAINER" bash -c "cd gui && npm install >/dev/null 2>&1"
+docker exec "$DEV_CONTAINER" sh -c "cd gui && npm install >/dev/null 2>&1"
 
 echo "Configurazione comando cmd..."
-docker exec "$DEV_CONTAINER" bash -c "
+docker exec "$DEV_CONTAINER" sh -c "
     chmod +x /usr/src/app/bin/cmd
     ln -sf /usr/src/app/bin/cmd /usr/local/bin/cmd
 "
+
+echo "Configurazione alias cls..."
+docker exec "$DEV_CONTAINER" sh -c "
+    if ! grep -q 'alias cls=' /root/.bashrc 2>/dev/null; then
+        echo \"alias cls='clear'\" >> /root/.bashrc
+        echo 'Alias cls aggiunto al .bashrc'
+    else
+        echo 'Alias cls già presente nel .bashrc'
+    fi
+"
+
+# Install MariaDB schemas if enabled
+if [ "$MARIADB_ENABLED" = "y" ]; then
+    echo ""
+    echo "MariaDB abilitato - installazione schemi..."
+
+    # Check if MariaDB is reachable by testing connection
+    if ! docker exec "$DEV_CONTAINER" sh -c "command -v mysqladmin >/dev/null 2>&1"; then
+        echo "Installazione client MariaDB nel container..."
+        docker exec "$DEV_CONTAINER" sh -c "apt-get update -qq && apt-get install -y -qq mariadb-client >/dev/null 2>&1"
+    fi
+
+    if ! docker exec "$DEV_CONTAINER" mysqladmin ping -h"$MARIADB_CONTAINER" -u"$MARIADB_ROOT_USER" -p"$MARIADB_ROOT_PASSWORD" >/dev/null 2>&1; then
+        echo "ERRORE: MariaDB è abilitato (MARIADB_ENABLED=y) ma il container '$MARIADB_CONTAINER' non è raggiungibile."
+        echo "Installalo con: ./install.sh --mariadb"
+        exit 1
+    fi
+
+    # Cleanup: drop and recreate database for clean state
+    echo "  Ricreazione database MySQL per installazione pulita..."
+    docker exec "$DEV_CONTAINER" mysql -h"$MARIADB_CONTAINER" -u"$MARIADB_ROOT_USER" -p"$MARIADB_ROOT_PASSWORD" \
+        -e "DROP DATABASE IF EXISTS \`$MARIADB_NAME\`; CREATE DATABASE \`$MARIADB_NAME\`;" 2>/dev/null || \
+        echo "  [WARN] Impossibile ricreare il database MySQL"
+
+    # Apply database schemas if present
+    if docker exec "$DEV_CONTAINER" test -f /usr/src/app/database/mod_status/mariadb_install.sql; then
+        echo "  Applicazione schema mod_status (MySQL)..."
+        docker exec "$DEV_CONTAINER" sh -c "cd /usr/src/app/database/mod_status && /usr/src/app/bin/cmd db -f mariadb_install.sql" || \
+            echo "  [WARN] Impossibile applicare lo schema mod_status"
+    fi
+
+    echo "Schemi MySQL applicati"
+fi
+
+# Install PostgreSQL schemas if enabled
+if [ "$PGSQL_ENABLED" = "y" ]; then
+    echo ""
+    echo "PostgreSQL abilitato - installazione schemi..."
+
+    # Check if PostgreSQL client is installed
+    if ! docker exec "$DEV_CONTAINER" sh -c "command -v psql >/dev/null 2>&1"; then
+        echo "Installazione client PostgreSQL nel container..."
+        docker exec "$DEV_CONTAINER" sh -c "apt-get update -qq && apt-get install -y -qq postgresql-client >/dev/null 2>&1"
+    fi
+
+    # Check if PostgreSQL is reachable by testing connection
+    if ! docker exec "$DEV_CONTAINER" pg_isready -h"$PGSQL_CONTAINER" -U"$PGSQL_ROOT_USER" >/dev/null 2>&1; then
+        echo "ERRORE: PostgreSQL è abilitato (PGSQL_ENABLED=y) ma il container '$PGSQL_CONTAINER' non è raggiungibile."
+        echo "Installalo con: ./install.sh --postgres"
+        exit 1
+    fi
+
+    # Cleanup: drop and recreate database for clean state
+    echo "  Ricreazione database PostgreSQL per installazione pulita..."
+    docker exec "$DEV_CONTAINER" sh -c "PGPASSWORD=\"$PGSQL_ROOT_PASSWORD\" psql -h\"$PGSQL_CONTAINER\" -U\"$PGSQL_ROOT_USER\" -d postgres \
+        -c \"DROP DATABASE IF EXISTS \\\"$PGSQL_NAME\\\";\"" 2>/dev/null || true
+    docker exec "$DEV_CONTAINER" sh -c "PGPASSWORD=\"$PGSQL_ROOT_PASSWORD\" psql -h\"$PGSQL_CONTAINER\" -U\"$PGSQL_ROOT_USER\" -d postgres \
+        -c \"CREATE DATABASE \\\"$PGSQL_NAME\\\";\"" 2>/dev/null || echo "  [WARN] Impossibile creare il database PostgreSQL"
+
+    # Create dedicated user (like MariaDB does)
+    echo "  Creazione utente PostgreSQL dedicato '$PGSQL_USER'..."
+    docker exec "$DEV_CONTAINER" sh -c "PGPASSWORD=\"$PGSQL_ROOT_PASSWORD\" psql -h\"$PGSQL_CONTAINER\" -U\"$PGSQL_ROOT_USER\" -d postgres \
+        -c \"DROP USER IF EXISTS \\\"$PGSQL_USER\\\";\"" 2>/dev/null || true
+    docker exec "$DEV_CONTAINER" sh -c "PGPASSWORD=\"$PGSQL_ROOT_PASSWORD\" psql -h\"$PGSQL_CONTAINER\" -U\"$PGSQL_ROOT_USER\" -d postgres \
+        -c \"CREATE USER \\\"$PGSQL_USER\\\" WITH PASSWORD '$PGSQL_PASSWORD';\"" 2>/dev/null || echo "  [WARN] Impossibile creare l'utente PostgreSQL"
+    docker exec "$DEV_CONTAINER" sh -c "PGPASSWORD=\"$PGSQL_ROOT_PASSWORD\" psql -h\"$PGSQL_CONTAINER\" -U\"$PGSQL_ROOT_USER\" -d postgres \
+        -c \"GRANT ALL PRIVILEGES ON DATABASE \\\"$PGSQL_NAME\\\" TO \\\"$PGSQL_USER\\\";\"" 2>/dev/null || echo "  [WARN] Impossibile garantire i privilegi"
+    docker exec "$DEV_CONTAINER" sh -c "PGPASSWORD=\"$PGSQL_ROOT_PASSWORD\" psql -h\"$PGSQL_CONTAINER\" -U\"$PGSQL_ROOT_USER\" -d \"$PGSQL_NAME\" \
+        -c \"GRANT ALL ON SCHEMA public TO \\\"$PGSQL_USER\\\";\"" 2>/dev/null || echo "  [WARN] Impossibile garantire i privilegi dello schema"
+
+    # Apply database schemas if present
+    if docker exec "$DEV_CONTAINER" test -f /usr/src/app/database/mod_status/postgres_install.sql; then
+        echo "  Applicazione schema mod_status (PostgreSQL)..."
+        docker exec "$DEV_CONTAINER" sh -c "cd /usr/src/app/database/mod_status && /usr/src/app/bin/cmd db -f postgres_install.sql" || \
+            echo "  [WARN] Impossibile applicare lo schema mod_status"
+    fi
+
+    echo "Schemi PostgreSQL applicati"
+fi
 
 echo ""
 echo "=========================================="
 echo "Applicazione Spring Boot + Svelte generata!"
 echo "=========================================="
-echo ""
-echo "Spring Boot Backend:"
-echo "  - Endpoint REST: http://localhost:$DEV_PORT_HOST/api/hello"
-echo "  - Pagina HTML:   http://localhost:$DEV_PORT_HOST/"
-echo ""
-echo "Database SQLite:"
-echo "  - Percorso: $DB_DIR/$PROJECT_NAME.db"
-echo "  - Driver: sqlite-jdbc $SQLITE_VERSION"
-echo ""
-echo "Flyway Migrations:"
-echo "  - Migration: V1__init_database.sql"
-echo "  - Le migration vengono eseguite automaticamente all'avvio"
-echo ""
-echo "Svelte Frontend (gui/):"
-echo "  - Dev server: http://localhost:$VITE_PORT/"
-echo "  - Build output: src/main/resources/static/"
-echo ""
-echo "Comandi utili:"
-echo "  - Avvia Spring Boot: docker exec -it $DEV_CONTAINER mvn spring-boot:run"
-echo "  - Avvia Vite dev:    docker exec -it $DEV_CONTAINER bash -c 'cd gui && npm run dev'"
-echo "  - Build Svelte:      docker exec -it $DEV_CONTAINER bash -c 'cd gui && npm run build'"
-echo "  - Shell container:   docker exec -it $DEV_CONTAINER bash"
-echo ""
-echo "Debug (VSCode):"
-echo "  - Debug port: $DEBUG_PORT"
-echo ""
-echo "NOTA: All'avvio Flyway eseguirà le migration e creerà il database"
-echo ""

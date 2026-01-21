@@ -19,6 +19,7 @@ import java.util.HashMap;
 public class DB {
 
     private String source;
+    private DataSource dataSource;
     private Connection connection;
     private long lastGeneratedKey = -1;
 
@@ -28,17 +29,35 @@ public class DB {
      */
     public DB(String jndiName) {
         this.source = jndiName;
+        this.dataSource = null;
     }
 
     /**
-     * Opens database connection using JNDI datasource lookup
+     * Constructor with DataSource (recommended for Spring Boot)
+     * @param dataSource DataSource to use for connections
+     */
+    public DB(DataSource dataSource) {
+        this.dataSource = dataSource;
+        this.source = null;
+    }
+
+    /**
+     * Opens database connection using JNDI datasource lookup or direct DataSource
      * @throws Exception if connection fails
      */
     public void open() throws Exception {
-        InitialContext ctx = new InitialContext();
-        DataSource ds = (DataSource) ctx.lookup("java:comp/env/" + source);
-        connection = ds.getConnection();
-        ctx.close();
+        if (dataSource != null) {
+            // Use direct DataSource (Spring Boot)
+            connection = dataSource.getConnection();
+        } else if (source != null) {
+            // Use JNDI lookup (legacy)
+            InitialContext ctx = new InitialContext();
+            DataSource ds = (DataSource) ctx.lookup("java:comp/env/" + source);
+            connection = ds.getConnection();
+            ctx.close();
+        } else {
+            throw new Exception("No DataSource or JNDI name configured");
+        }
     }
 
     /**
