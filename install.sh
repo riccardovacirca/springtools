@@ -245,17 +245,217 @@ if [ "$1" = "--origin" ]; then
     exit 0
 fi
 
+# Configure application.properties for MariaDB
+configure_mariadb_properties() {
+    PROPS_FILE="src/main/resources/application.properties"
+
+    if [ ! -f "$PROPS_FILE" ]; then
+        echo "ERRORE: File $PROPS_FILE non trovato. Esegui prima './install.sh --dev'"
+        return 1
+    fi
+
+    echo "  Configurazione application.properties per MariaDB..."
+
+    # Comment out SQLite configuration
+    sed -i 's/^spring\.datasource\.url=jdbc:sqlite:/#spring.datasource.url=jdbc:sqlite:/' "$PROPS_FILE"
+    sed -i 's/^spring\.datasource\.driver-class-name=org\.sqlite\.JDBC/#spring.datasource.driver-class-name=org.sqlite.JDBC/' "$PROPS_FILE"
+
+    # Uncomment MariaDB configuration
+    sed -i "s|^#spring\.datasource\.url=jdbc:mariadb://.*|spring.datasource.url=jdbc:mariadb://$MARIADB_CONTAINER:3306/$MARIADB_NAME|" "$PROPS_FILE"
+    sed -i 's/^#spring\.datasource\.driver-class-name=org\.mariadb\.jdbc\.Driver/spring.datasource.driver-class-name=org.mariadb.jdbc.Driver/' "$PROPS_FILE"
+    sed -i "s/^#spring\.datasource\.username=appuser/spring.datasource.username=$MARIADB_USER/" "$PROPS_FILE"
+    sed -i "s/^#spring\.datasource\.password=apppass/spring.datasource.password=$MARIADB_PASSWORD/" "$PROPS_FILE"
+
+    echo "  application.properties configurato per MariaDB"
+}
+
+# Configure application.properties for PostgreSQL
+configure_pgsql_properties() {
+    PROPS_FILE="src/main/resources/application.properties"
+
+    if [ ! -f "$PROPS_FILE" ]; then
+        echo "ERRORE: File $PROPS_FILE non trovato. Esegui prima './install.sh --dev'"
+        return 1
+    fi
+
+    echo "  Configurazione application.properties per PostgreSQL..."
+
+    # Comment out SQLite configuration
+    sed -i 's/^spring\.datasource\.url=jdbc:sqlite:/#spring.datasource.url=jdbc:sqlite:/' "$PROPS_FILE"
+    sed -i 's/^spring\.datasource\.driver-class-name=org\.sqlite\.JDBC/#spring.datasource.driver-class-name=org.sqlite.JDBC/' "$PROPS_FILE"
+
+    # Uncomment PostgreSQL configuration
+    sed -i "s|^#spring\.datasource\.url=jdbc:postgresql://.*|spring.datasource.url=jdbc:postgresql://$PGSQL_CONTAINER:5432/$PGSQL_NAME|" "$PROPS_FILE"
+    sed -i 's/^#spring\.datasource\.driver-class-name=org\.postgresql\.Driver/spring.datasource.driver-class-name=org.postgresql.Driver/' "$PROPS_FILE"
+    sed -i "s/^#spring\.datasource\.username=appuser/spring.datasource.username=$PGSQL_USER/" "$PROPS_FILE"
+    sed -i "s/^#spring\.datasource\.password=apppass/spring.datasource.password=$PGSQL_PASSWORD/" "$PROPS_FILE"
+
+    echo "  application.properties configurato per PostgreSQL"
+}
+
+# Setup MariaDB database
+setup_mariadb_database() {
+    echo "  Attesa disponibilità MariaDB..."
+    sleep 3
+
+    # Install MariaDB client if not present
+    if ! docker exec "$DEV_CONTAINER" sh -c "command -v mysql >/dev/null 2>&1"; then
+        echo "  Installazione client MariaDB nel container dev..."
+        docker exec "$DEV_CONTAINER" sh -c "apt-get update -qq && apt-get install -y -qq mariadb-client >/dev/null 2>&1"
+    fi
+
+    # Wait for MariaDB to be ready
+    echo "  Verifica connessione MariaDB..."
+    for i in 1 2 3 4 5; do
+        if docker exec "$DEV_CONTAINER" mysqladmin ping -h"$MARIADB_CONTAINER" -u"$MARIADB_ROOT_USER" -p"$MARIADB_ROOT_PASSWORD" >/dev/null 2>&1; then
+            echo "  MariaDB pronto"
+            break
+        fi
+        echo "  Tentativo $i/5..."
+        sleep 2
+    done
+
+    if ! docker exec "$DEV_CONTAINER" mysqladmin ping -h"$MARIADB_CONTAINER" -u"$MARIADB_ROOT_USER" -p"$MARIADB_ROOT_PASSWORD" >/dev/null 2>&1; then
+        echo "  [WARN] MariaDB non raggiungibile"
+        return 1
+    fi
+
+    echo "  Configurazione database e permessi..."
+    docker exec "$DEV_CONTAINER" mysql -h"$MARIADB_CONTAINER" -u"$MARIADB_ROOT_USER" -p"$MARIADB_ROOT_PASSWORD" \
+        -e "GRANT ALL PRIVILEGES ON \`$MARIADB_NAME\`.* TO '$MARIADB_USER'@'%';" 2>/dev/null || true
+
+    echo "  Setup MariaDB completato"
+}
+
+# Setup PostgreSQL database
+setup_pgsql_database() {
+    echo "  Attesa disponibilità PostgreSQL..."
+    sleep 3
+
+    # Install PostgreSQL client if not present
+    if ! docker exec "$DEV_CONTAINER" sh -c "command -v psql >/dev/null 2>&1"; then
+        echo "  Installazione client PostgreSQL nel container dev..."
+        docker exec "$DEV_CONTAINER" sh -c "apt-get update -qq && apt-get install -y -qq postgresql-client >/dev/null 2>&1"
+    fi
+
+    # Wait for PostgreSQL to be ready
+    echo "  Verifica connessione PostgreSQL..."
+    for i in 1 2 3 4 5; do
+        if docker exec "$DEV_CONTAINER" pg_isready -h"$PGSQL_CONTAINER" -U"$PGSQL_ROOT_USER" >/dev/null 2>&1; then
+            echo "  PostgreSQL pronto"
+            break
+        fi
+        echo "  Tentativo $i/5..."
+        sleep 2
+    done
+
+    if ! docker exec "$DEV_CONTAINER" pg_isready -h"$PGSQL_CONTAINER" -U"$PGSQL_ROOT_USER" >/dev/null 2>&1; then
+        echo "  [WARN] PostgreSQL non raggiungibile"
+        return 1
+    fi
+
+    echo "  Configurazione database e permessi..."
+    docker exec "$DEV_CONTAINER" sh -c "PGPASSWORD=\"$PGSQL_ROOT_PASSWORD\" psql -h\"$PGSQL_CONTAINER\" -U\"$PGSQL_ROOT_USER\" -d \"$PGSQL_NAME\" \
+        -c \"GRANT ALL ON SCHEMA public TO \\\"$PGSQL_USER\\\";\"" 2>/dev/null || true
+
+    echo "  Setup PostgreSQL completato"
+}
+
 # Gestione opzione --mariadb
 if [ "$1" = "--mariadb" ]; then
-    echo "Configurazione container MariaDB..."
+    if [ "$MARIADB_ENABLED" != "y" ]; then
+        echo "ERRORE: MariaDB non è abilitato nel file .env"
+        echo "Imposta MARIADB_ENABLED=y nel file .env per continuare"
+        exit 1
+    fi
+
+    echo "Configurazione MariaDB..."
+
+    # Check if dev container is running
+    if ! docker ps --format '{{.Names}}' | grep -q "^$DEV_CONTAINER$"; then
+        echo "ERRORE: Container dev '$DEV_CONTAINER' non in esecuzione."
+        echo "Esegui prima './install.sh' per avviare il container dev."
+        exit 1
+    fi
+
+    # Create MariaDB container
     create_mariadb_container
+
+    # Check if application is generated
+    if [ ! -f pom.xml ]; then
+        echo ""
+        echo "=========================================="
+        echo "MariaDB container creato!"
+        echo "=========================================="
+        echo ""
+        echo "Esegui './install.sh --dev' per generare l'applicazione"
+        echo "e configurare automaticamente MariaDB."
+        exit 0
+    fi
+
+    # Configure application.properties
+    configure_mariadb_properties || exit 1
+
+    # Setup database
+    setup_mariadb_database
+
+    echo ""
+    echo "=========================================="
+    echo "MariaDB configurato e pronto!"
+    echo "=========================================="
+    echo "  Host: localhost:$MARIADB_PORT"
+    echo "  Database: $MARIADB_NAME"
+    echo "  User: $MARIADB_USER"
+    echo ""
     exit 0
 fi
 
 # Gestione opzione --postgres
 if [ "$1" = "--postgres" ]; then
-    echo "Configurazione container PostgreSQL..."
+    if [ "$PGSQL_ENABLED" != "y" ]; then
+        echo "ERRORE: PostgreSQL non è abilitato nel file .env"
+        echo "Imposta PGSQL_ENABLED=y nel file .env per continuare"
+        exit 1
+    fi
+
+    echo "Configurazione PostgreSQL..."
+
+    # Check if dev container is running
+    if ! docker ps --format '{{.Names}}' | grep -q "^$DEV_CONTAINER$"; then
+        echo "ERRORE: Container dev '$DEV_CONTAINER' non in esecuzione."
+        echo "Esegui prima './install.sh' per avviare il container dev."
+        exit 1
+    fi
+
+    # Create PostgreSQL container
     create_pgsql_container
+
+    # Check if application is generated
+    if [ ! -f pom.xml ]; then
+        echo ""
+        echo "=========================================="
+        echo "PostgreSQL container creato!"
+        echo "=========================================="
+        echo ""
+        echo "Esegui './install.sh --dev' per generare l'applicazione"
+        echo "e configurare automaticamente PostgreSQL."
+        exit 0
+    fi
+
+    # Configure application.properties
+    configure_pgsql_properties || exit 1
+
+    # Setup database
+    setup_pgsql_database
+
+    echo ""
+    echo "=========================================="
+    echo "PostgreSQL configurato e pronto!"
+    echo "=========================================="
+    echo "  Host: localhost:$PGSQL_PORT"
+    echo "  Database: $PGSQL_NAME"
+    echo "  User: $PGSQL_USER"
+    echo ""
     exit 0
 fi
 
@@ -366,83 +566,39 @@ docker exec "$DEV_CONTAINER" sh -c "
     fi
 "
 
-# Install MariaDB schemas if enabled
+# Configure databases if enabled
 if [ "$MARIADB_ENABLED" = "y" ]; then
     echo ""
-    echo "MariaDB abilitato - installazione schemi..."
+    echo "MariaDB abilitato - configurazione..."
 
-    # Check if MariaDB is reachable by testing connection
-    if ! docker exec "$DEV_CONTAINER" sh -c "command -v mysqladmin >/dev/null 2>&1"; then
-        echo "Installazione client MariaDB nel container..."
-        docker exec "$DEV_CONTAINER" sh -c "apt-get update -qq && apt-get install -y -qq mariadb-client >/dev/null 2>&1"
-    fi
-
+    # Check if MariaDB container exists
     if ! docker exec "$DEV_CONTAINER" mysqladmin ping -h"$MARIADB_CONTAINER" -u"$MARIADB_ROOT_USER" -p"$MARIADB_ROOT_PASSWORD" >/dev/null 2>&1; then
         echo "ERRORE: MariaDB è abilitato (MARIADB_ENABLED=y) ma il container '$MARIADB_CONTAINER' non è raggiungibile."
         echo "Installalo con: ./install.sh --mariadb"
         exit 1
     fi
 
-    # Cleanup: drop and recreate database for clean state
-    echo "  Ricreazione database MySQL per installazione pulita..."
-    docker exec "$DEV_CONTAINER" mysql -h"$MARIADB_CONTAINER" -u"$MARIADB_ROOT_USER" -p"$MARIADB_ROOT_PASSWORD" \
-        -e "DROP DATABASE IF EXISTS \`$MARIADB_NAME\`; CREATE DATABASE \`$MARIADB_NAME\`;" 2>/dev/null || \
-        echo "  [WARN] Impossibile ricreare il database MySQL"
+    # Configure application.properties
+    configure_mariadb_properties
 
-    # Apply database schemas if present
-    if docker exec "$DEV_CONTAINER" test -f /usr/src/app/database/mod_status/mariadb_install.sql; then
-        echo "  Applicazione schema mod_status (MySQL)..."
-        docker exec "$DEV_CONTAINER" sh -c "cd /usr/src/app/database/mod_status && /usr/src/app/bin/cmd db -f mariadb_install.sql" || \
-            echo "  [WARN] Impossibile applicare lo schema mod_status"
-    fi
-
-    echo "Schemi MySQL applicati"
+    echo "MariaDB configurato in application.properties"
 fi
 
-# Install PostgreSQL schemas if enabled
 if [ "$PGSQL_ENABLED" = "y" ]; then
     echo ""
-    echo "PostgreSQL abilitato - installazione schemi..."
+    echo "PostgreSQL abilitato - configurazione..."
 
-    # Check if PostgreSQL client is installed
-    if ! docker exec "$DEV_CONTAINER" sh -c "command -v psql >/dev/null 2>&1"; then
-        echo "Installazione client PostgreSQL nel container..."
-        docker exec "$DEV_CONTAINER" sh -c "apt-get update -qq && apt-get install -y -qq postgresql-client >/dev/null 2>&1"
-    fi
-
-    # Check if PostgreSQL is reachable by testing connection
+    # Check if PostgreSQL container exists
     if ! docker exec "$DEV_CONTAINER" pg_isready -h"$PGSQL_CONTAINER" -U"$PGSQL_ROOT_USER" >/dev/null 2>&1; then
         echo "ERRORE: PostgreSQL è abilitato (PGSQL_ENABLED=y) ma il container '$PGSQL_CONTAINER' non è raggiungibile."
         echo "Installalo con: ./install.sh --postgres"
         exit 1
     fi
 
-    # Cleanup: drop and recreate database for clean state
-    echo "  Ricreazione database PostgreSQL per installazione pulita..."
-    docker exec "$DEV_CONTAINER" sh -c "PGPASSWORD=\"$PGSQL_ROOT_PASSWORD\" psql -h\"$PGSQL_CONTAINER\" -U\"$PGSQL_ROOT_USER\" -d postgres \
-        -c \"DROP DATABASE IF EXISTS \\\"$PGSQL_NAME\\\";\"" 2>/dev/null || true
-    docker exec "$DEV_CONTAINER" sh -c "PGPASSWORD=\"$PGSQL_ROOT_PASSWORD\" psql -h\"$PGSQL_CONTAINER\" -U\"$PGSQL_ROOT_USER\" -d postgres \
-        -c \"CREATE DATABASE \\\"$PGSQL_NAME\\\";\"" 2>/dev/null || echo "  [WARN] Impossibile creare il database PostgreSQL"
+    # Configure application.properties
+    configure_pgsql_properties
 
-    # Create dedicated user (like MariaDB does)
-    echo "  Creazione utente PostgreSQL dedicato '$PGSQL_USER'..."
-    docker exec "$DEV_CONTAINER" sh -c "PGPASSWORD=\"$PGSQL_ROOT_PASSWORD\" psql -h\"$PGSQL_CONTAINER\" -U\"$PGSQL_ROOT_USER\" -d postgres \
-        -c \"DROP USER IF EXISTS \\\"$PGSQL_USER\\\";\"" 2>/dev/null || true
-    docker exec "$DEV_CONTAINER" sh -c "PGPASSWORD=\"$PGSQL_ROOT_PASSWORD\" psql -h\"$PGSQL_CONTAINER\" -U\"$PGSQL_ROOT_USER\" -d postgres \
-        -c \"CREATE USER \\\"$PGSQL_USER\\\" WITH PASSWORD '$PGSQL_PASSWORD';\"" 2>/dev/null || echo "  [WARN] Impossibile creare l'utente PostgreSQL"
-    docker exec "$DEV_CONTAINER" sh -c "PGPASSWORD=\"$PGSQL_ROOT_PASSWORD\" psql -h\"$PGSQL_CONTAINER\" -U\"$PGSQL_ROOT_USER\" -d postgres \
-        -c \"GRANT ALL PRIVILEGES ON DATABASE \\\"$PGSQL_NAME\\\" TO \\\"$PGSQL_USER\\\";\"" 2>/dev/null || echo "  [WARN] Impossibile garantire i privilegi"
-    docker exec "$DEV_CONTAINER" sh -c "PGPASSWORD=\"$PGSQL_ROOT_PASSWORD\" psql -h\"$PGSQL_CONTAINER\" -U\"$PGSQL_ROOT_USER\" -d \"$PGSQL_NAME\" \
-        -c \"GRANT ALL ON SCHEMA public TO \\\"$PGSQL_USER\\\";\"" 2>/dev/null || echo "  [WARN] Impossibile garantire i privilegi dello schema"
-
-    # Apply database schemas if present
-    if docker exec "$DEV_CONTAINER" test -f /usr/src/app/database/mod_status/postgres_install.sql; then
-        echo "  Applicazione schema mod_status (PostgreSQL)..."
-        docker exec "$DEV_CONTAINER" sh -c "cd /usr/src/app/database/mod_status && /usr/src/app/bin/cmd db -f postgres_install.sql" || \
-            echo "  [WARN] Impossibile applicare lo schema mod_status"
-    fi
-
-    echo "Schemi PostgreSQL applicati"
+    echo "PostgreSQL configurato in application.properties"
 fi
 
 echo ""

@@ -1,8 +1,8 @@
-package dev.myapp.module.monitoring.controller;
+package ${package}.module.status.controller;
 
-import dev.myapp.module.monitoring.dto.MonitoringLogDto;
-import dev.myapp.module.monitoring.dto.HealthDto;
-import dev.myapp.module.monitoring.service.MonitoringService;
+import ${package}.module.status.dto.MonitoringLogDto;
+import ${package}.module.status.dto.HealthDto;
+import ${package}.module.status.service.MonitoringService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;

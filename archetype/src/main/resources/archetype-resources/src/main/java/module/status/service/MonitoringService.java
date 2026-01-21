@@ -1,8 +1,8 @@
-package dev.myapp.module.monitoring.service;
+package ${package}.module.status.service;
 
-import dev.myapp.module.monitoring.dao.MonitoringDao;
-import dev.myapp.module.monitoring.dto.MonitoringLogDto;
-import dev.myapp.module.monitoring.dto.HealthDto;
+import ${package}.module.status.dao.MonitoringDao;
+import ${package}.module.status.dto.MonitoringLogDto;
+import ${package}.module.status.dto.HealthDto;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

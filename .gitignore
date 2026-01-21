@@ -7,5 +7,5 @@
 !TODO.md
 archetype/target/
 archetype/target/**
-!tmp/
-!tmp/**
+!archetype/src/main/resources/archetype-resources/.vscode/
+!archetype/src/main/resources/archetype-resources/.vscode/**

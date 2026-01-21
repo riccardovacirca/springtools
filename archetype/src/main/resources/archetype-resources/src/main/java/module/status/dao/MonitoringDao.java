@@ -1,11 +1,12 @@
-package dev.myapp.module.monitoring.dao;
+package ${package}.module.status.dao;
 
-import dev.hello.utils.DB;
-import dev.hello.utils.DB.Record;
-import dev.hello.utils.DB.Recordset;
-import dev.myapp.module.monitoring.dto.MonitoringLogDto;
+import ${package}.utils.DB;
+import ${package}.utils.DB.Record;
+import ${package}.utils.DB.Recordset;
+import ${package}.module.status.dto.MonitoringLogDto;
 import org.springframework.stereotype.Repository;
 
+import javax.sql.DataSource;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -13,13 +14,17 @@ import java.util.List;
 @Repository
 public class MonitoringDao {
 
-    private static final String JNDI = "jdbc/hello";
+    private final DataSource dataSource;
+
+    public MonitoringDao(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
 
     public long insertLog(String message) throws Exception {
-        DB db = new DB(JNDI);
+        DB db = new DB(dataSource);
         try {
             db.open();
-            db.query("INSERT INTO monitoring_logs (message, created_at) VALUES (?, ?)",
+            db.query("INSERT INTO status_logs (message, created_at) VALUES (?, ?)",
                     message, DB.toSqlTimestamp(LocalDateTime.now()));
             return db.lastInsertId();
         } finally {
@@ -28,11 +33,11 @@ public class MonitoringDao {
     }
 
     public List<MonitoringLogDto> findLogs(int limit, int offset) throws Exception {
-        DB db = new DB(JNDI);
+        DB db = new DB(dataSource);
         List<MonitoringLogDto> logs = new ArrayList<>();
         try {
             db.open();
-            Recordset rs = db.select("SELECT id, message, created_at FROM monitoring_logs ORDER BY id DESC LIMIT ? OFFSET ?",
+            Recordset rs = db.select("SELECT id, message, created_at FROM status_logs ORDER BY id DESC LIMIT ? OFFSET ?",
                     limit, offset);
             for (Record r : rs) {
                 logs.add(new MonitoringLogDto(

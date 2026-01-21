@@ -1,4 +1,4 @@
-package ${package}.module.monitoring.dto;
+package ${package}.module.status.dto;
 
 public class HealthDto {
     private String status;
