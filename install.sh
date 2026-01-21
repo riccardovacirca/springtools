@@ -14,7 +14,7 @@ generate_env_file() {
 # Configurazione Comune
 # ========================================
 PROJECT_NAME=PROJECT_DIR_PLACEHOLDER
-GROUP_ID=com.example
+GROUP_ID=GROUP_ID_PLACEHOLDER
 ARTIFACT_VERSION=0.0.1-SNAPSHOT
 JAVA_VERSION=21
 SPRING_BOOT_VERSION=3.5.0
@@ -51,6 +51,7 @@ GIT_EMAIL=
 GIT_TOKEN=
 EOF
     sed -i '' "s|PROJECT_DIR_PLACEHOLDER|$project_dir|g" .env
+    sed -i '' "s|GROUP_ID_PLACEHOLDER|dev.$project_dir|g" .env
     echo "File .env generato con configurazione di default"
 }
 
@@ -66,7 +67,7 @@ if [ ! -f .env ]; then
     echo "Il file .env è stato generato con i valori di default."
     echo "Modifica il file .env per personalizzare:"
     echo "  - PROJECT_NAME: nome del progetto (default: nome cartella)"
-    echo "  - GROUP_ID: groupId Maven (default: com.example)"
+    echo "  - GROUP_ID: groupId Maven (default: dev.<nome_cartella>)"
     echo "  - DEV_PORT_HOST: porta per l'ambiente di sviluppo (default: 2310)"
     echo "  - Altri parametri di configurazione"
     echo ""
@@ -86,6 +87,32 @@ echo "Configurazione caricata da .env"
 # Variabili derivate per sviluppo
 DEV_NETWORK="$PROJECT_NAME$DEV_NETWORK_SUFFIX"
 DEV_CONTAINER="$PROJECT_NAME-dev"
+
+# Gestione opzione --origin
+if [ "$1" = "--origin" ]; then
+    echo "Clonazione repository originale..."
+    if [ -n "$(ls -A . | grep -v '^\.env$' | grep -v '^install\.sh$')" ]; then
+        echo "ATTENZIONE: La cartella corrente non è vuota."
+        echo "Il clone potrebbe sovrascrivere file esistenti."
+        read -p "Continuare? (s/n): " confirm
+        if [ "$confirm" != "s" ] && [ "$confirm" != "S" ]; then
+            echo "Operazione annullata."
+            exit 0
+        fi
+    fi
+
+    git clone https://github.com/riccardovacirca/springtools.git .
+    echo ""
+    echo "=========================================="
+    echo "Repository originale clonato con successo!"
+    echo "=========================================="
+    echo ""
+    echo "Puoi ora eseguire:"
+    echo "  ./install.sh          # Per creare il container"
+    echo "  ./install.sh --dev    # Per generare l'applicazione"
+    echo ""
+    exit 0
+fi
 
 # Step 1: Crea e avvia il container
 if [ "$1" != "--dev" ]; then
@@ -139,7 +166,7 @@ if [ -f pom.xml ]; then
 fi
 
 echo "Installazione dipendenze nel container..."
-docker exec "$DEV_CONTAINER" bash -c "apt-get update -qq && apt-get install -y -qq sqlite3 git > /dev/null 2>&1"
+docker exec "$DEV_CONTAINER" bash -c "apt-get update -qq && apt-get install -y -qq sqlite3 git rsync > /dev/null 2>&1"
 
 echo "Installazione archetipo nel repository Maven locale..."
 docker exec "$DEV_CONTAINER" mvn -f "$ARCHETYPE_DIR/pom.xml" clean install -q

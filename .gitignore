@@ -7,3 +7,5 @@
 !TODO.md
 archetype/target/
 archetype/target/**
+!tmp/
+!tmp/**

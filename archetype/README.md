@@ -21,7 +21,7 @@ mvn archetype:generate \
   -DarchetypeGroupId=dev.springtools \
   -DarchetypeArtifactId=spring-svelte-archetype \
   -DarchetypeVersion=1.0.0 \
-  -DgroupId=com.example \
+  -DgroupId=dev.myproject \
   -DartifactId=myproject \
   -Dversion=1.0.0-SNAPSHOT \
   -DinteractiveMode=false

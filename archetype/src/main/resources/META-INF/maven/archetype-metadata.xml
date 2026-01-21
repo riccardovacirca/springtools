@@ -8,7 +8,7 @@
 
     <requiredProperties>
         <requiredProperty key="groupId">
-            <defaultValue>com.example</defaultValue>
+            <defaultValue>dev.myapp</defaultValue>
         </requiredProperty>
         <requiredProperty key="artifactId">
             <defaultValue>myapp</defaultValue>
@@ -32,13 +32,12 @@
             </includes>
         </fileSet>
 
-        <!-- Maven wrapper e script (senza filtering) -->
+        <!-- Maven wrapper (senza filtering) -->
         <fileSet filtered="false" packaged="false">
             <directory></directory>
             <includes>
                 <include>mvnw</include>
                 <include>mvnw.cmd</include>
-                <include>release.sh</include>
             </includes>
         </fileSet>
 

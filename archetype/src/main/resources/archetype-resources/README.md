@@ -15,7 +15,7 @@ Spring Boot application with Svelte/Vite frontend and SQLite database.
 - `bin/` - Utility scripts
 - `data/` - SQLite database (auto-created)
 - `logs/` - Application logs
-- `release.sh` - Release script (Docker container for production)
+- `bin/release` - Release script (Docker container for production)
 
 ## Run
 

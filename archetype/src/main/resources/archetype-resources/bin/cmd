@@ -59,6 +59,12 @@ Git Options:
   -r, --repo <path>                 Use git repo at <path> (default: project root)
                                     Example: cmd git push -r .springtools
 
+Sync Operations (rsync based):
+  cmd sync -r <path>                Sync directories using .sync config file
+                                    Example: cmd sync -r .myrepo
+                                    The .sync file format (semicolon separated):
+                                    source;destination;includes;excludes
+
 Options:
   -h, --help                        Show this help message
 EOF
@@ -613,6 +619,81 @@ git_merge() {
 }
 
 # ============================================================================
+# Sync Operations (rsync based on .sync config)
+# ============================================================================
+
+# Synchronize directories based on .sync configuration file
+sync_repo() {
+    local SYNC_DIR="$1"
+
+    if [ -z "$SYNC_DIR" ]; then
+        error "Devi specificare la cartella contenente .sync"
+    fi
+
+    # Convert to absolute path if relative
+    if [[ "$SYNC_DIR" != /* ]]; then
+        SYNC_DIR="$WORKSPACE/$SYNC_DIR"
+    fi
+
+    local CONFIG_FILE="$SYNC_DIR/.sync"
+
+    if [ ! -f "$CONFIG_FILE" ]; then
+        error "File di configurazione .sync non trovato in $SYNC_DIR"
+    fi
+
+    info "Starting sync from $CONFIG_FILE..."
+
+    while IFS= read -r line || [ -n "$line" ]; do
+        # Ignora righe vuote o commenti
+        [ -z "$line" ] && continue
+        case "$line" in \#*) continue ;; esac
+
+        ORIG=$(echo "$line" | cut -d';' -f1)
+        DEST=$(echo "$line" | cut -d';' -f2)
+        INCLUDE_ENTRIES=$(echo "$line" | cut -d';' -f3)
+        EXCLUDE_ENTRIES=$(echo "$line" | cut -d';' -f4)
+
+        info "  Syncing: $ORIG -> $DEST"
+
+        # Prepara le opzioni include
+        INCLUDE_OPTS=""
+        IFS=','
+        for i in $INCLUDE_ENTRIES; do
+            [ -n "$i" ] && INCLUDE_OPTS="$INCLUDE_OPTS --include='$i'"
+        done
+        unset IFS
+
+        # Prepara le opzioni exclude
+        EXCLUDE_OPTS=""
+        IFS=','
+        for e in $EXCLUDE_ENTRIES; do
+            [ -n "$e" ] && EXCLUDE_OPTS="$EXCLUDE_OPTS --exclude='$e'"
+        done
+        unset IFS
+
+        # Esegui rsync
+        if eval rsync -av --delete $INCLUDE_OPTS $EXCLUDE_OPTS "$ORIG/" "$DEST/" >/dev/null 2>&1; then
+            success "  Synced: $ORIG -> $DEST"
+        else
+            warn "  Failed to sync: $ORIG -> $DEST"
+        fi
+    done < "$CONFIG_FILE"
+
+    success "Sync completed"
+}
+
+# Main sync command handler
+sync_main() {
+    local REPO_PATH="$1"
+
+    if [ -z "$REPO_PATH" ]; then
+        error "Repository path is required. Use: cmd sync -r <repo>"
+    fi
+
+    sync_repo "$REPO_PATH"
+}
+
+# ============================================================================
 # Command parsing
 # ============================================================================
 
@@ -704,6 +785,25 @@ case "$1" in
                 error "Unknown git command: $GIT_CMD. Use: push, pull, sync, branch, merge"
                 ;;
         esac
+        ;;
+    sync)
+        REPO_PATH=""
+        shift 1
+
+        # Parse options
+        while [ $# -gt 0 ]; do
+            case "$1" in
+                -r|--repo)
+                    REPO_PATH="$2"
+                    shift 2
+                    ;;
+                *)
+                    error "Unknown option: $1"
+                    ;;
+            esac
+        done
+
+        sync_main "$REPO_PATH"
         ;;
     -h|--help|help|"")
         show_help

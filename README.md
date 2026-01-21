@@ -48,7 +48,7 @@ nano .env
 
 Parametri principali:
 - `PROJECT_NAME`: Nome del progetto (default: nome cartella)
-- `GROUP_ID`: GroupId Maven (default: com.example)
+- `GROUP_ID`: GroupId Maven (default: dev.<nome_cartella>)
 - `DEV_PORT_HOST`: Porta host per sviluppo (default: 2310)
 - `VITE_PORT`: Porta Vite dev server (default: 2350)
 - `DEBUG_PORT`: Porta debug Java (default: 5005)
@@ -104,7 +104,7 @@ myproject/
 ├── bin/                        # Utility scripts
 ├── data/                       # SQLite database directory
 ├── logs/                       # Application logs directory
-├── release.sh                  # Release script for production
+├── bin/release                 # Release script for production
 └── archetype/                  # Archetipo originale (puoi rimuoverlo)
 ```
 
@@ -148,7 +148,7 @@ Configurazione debug su porta 5005 (configurabile in `.env`).
 - **Frontend**: Svelte + Vite
 - **Utility**: 7 classi helper (JSON, HTTP, DB, DateTime, File, Env)
 - **Container**: Maven 3 con Eclipse Temurin 21
-- **Release**: Script `release.sh` per build e deploy in produzione
+- **Release**: Script `bin/release` per build e deploy in produzione
 
 ## Evolvere l'Archetipo
 
