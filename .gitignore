@@ -4,5 +4,6 @@
 !install.sh
 !.gitignore
 !README.md
+!TODO.md
 archetype/target/
 archetype/target/**
