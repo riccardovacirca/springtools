@@ -1,7 +1,7 @@
 <script>
   import { onMount } from 'svelte'
   import { auth, checkAuth } from './store.js'
-  import StatusLayout from './mod_status/Layout.svelte'
+  import StatusLayout from './module/status/Layout.svelte'
 
   let loading = true
 

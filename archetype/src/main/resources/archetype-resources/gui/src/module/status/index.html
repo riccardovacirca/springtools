@@ -17,14 +17,14 @@
 </head>
 
 <body>
-  <div id="mod_status"></div>
+  <div id="module_status"></div>
   <script type="module">
     import { mount } from 'svelte'
-    import Layout from '/mod_status/Layout.svelte'
+    import Layout from '/module/status/Layout.svelte'
 
     document.addEventListener('DOMContentLoaded', () => {
       mount(Layout, {
-        target: document.getElementById('mod_status')
+        target: document.getElementById('module_status')
       })
     })
   </script>

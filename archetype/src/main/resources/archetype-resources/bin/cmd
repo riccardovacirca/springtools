@@ -31,44 +31,39 @@ load_env() {
 
 # Show help
 show_help() {
-    cat << 'EOF'
+    cat << 'HELPEOF'
 Usage: cmd COMMAND [OPTIONS]
 
-App Management (Spring Boot):
-  cmd app build                     Build application (mvn package)
-  cmd app run                       Run in dev mode with hot reload (mvn spring-boot:run)
-  cmd app start                     Start application
-  cmd app stop                      Stop application
-  cmd app restart                   Restart application
-  cmd app status                    Show application status
+App (Spring Boot):
+  app build                Build application
+  app run                  Run in dev mode (background)
+  app start                Start production JAR
+  app stop                 Stop application
+  app restart              Restart application
+  app status               Show status
 
-GUI Management (Vite/Svelte):
-  cmd gui build                     Build GUI (npm run build)
-  cmd gui start                     Start Vite dev server
-  cmd gui stop                      Stop Vite dev server
-  cmd gui restart                   Restart Vite dev server
-  cmd gui status                    Show Vite status
+GUI (Vite/Svelte):
+  gui build                Build GUI for production
+  gui run                  Run Vite dev server
+  gui stop                 Stop Vite server
+  gui restart              Restart Vite server
+  gui status               Show status
 
-Git Operations:
-  cmd git push [-r <path>]          Stage, commit and push changes
-  cmd git pull [-r <path>]          Pull changes from remote
-  cmd git sync [-r <path>]          Sync repository (pull + push)
-  cmd git branch -b <name> [-r <path>]  Create/switch to branch
-  cmd git merge -b <name> [-r <path>]   Merge branch into main and delete
+Git:
+  git push [-r <path>]     Stage, commit and push
+  git pull [-r <path>]     Pull from remote
+  git sync [-r <path>]     Pull + commit + push
+  git branch -b <name> [-r <path>]   Create/switch branch
+  git merge -b <name> [-r <path>]    Merge branch to main and delete
 
-Git Options:
-  -r, --repo <path>                 Use git repo at <path> (default: project root)
-                                    Example: cmd git push -r .springtools
-
-Sync Operations (rsync based):
-  cmd sync -r <path>                Sync directories using .sync config file
-                                    Example: cmd sync -r .myrepo
-                                    The .sync file format (semicolon separated):
-                                    source;destination;includes;excludes
+Sync:
+  sync -r <path>           Sync using .sync config file
 
 Options:
-  -h, --help                        Show this help message
-EOF
+  -h, --help               Show this help
+  -r, --repo <path>        Git repo path (default: project root)
+  -b, --branch <name>      Branch name
+HELPEOF
 }
 
 # ============================================================================
@@ -76,6 +71,7 @@ EOF
 # ============================================================================
 
 APP_PID_FILE="$WORKSPACE/.app.pid"
+APP_WATCH_PID_FILE="$WORKSPACE/.app.watch.pid"
 
 app_build() {
     load_env
@@ -116,29 +112,58 @@ app_start() {
 }
 
 app_stop() {
-    if ! app_is_running; then
+    local STOPPED=0
+
+    # Stop main application process
+    if [ -f "$APP_PID_FILE" ]; then
+        local PID=$(cat "$APP_PID_FILE")
+        if kill -0 "$PID" 2>/dev/null; then
+            info "Stopping application (PID: $PID)..."
+            
+            # Kill child processes first (for mvn spring-boot:run)
+            pkill -P "$PID" 2>/dev/null || true
+            
+            # Kill main process
+            kill "$PID" 2>/dev/null || true
+
+            # Wait for process to stop
+            local COUNT=0
+            while kill -0 "$PID" 2>/dev/null && [ $COUNT -lt 10 ]; do
+                sleep 1
+                COUNT=$((COUNT + 1))
+            done
+
+            if kill -0 "$PID" 2>/dev/null; then
+                warn "Force killing application..."
+                kill -9 "$PID" 2>/dev/null || true
+                pkill -9 -P "$PID" 2>/dev/null || true
+            fi
+            
+            STOPPED=1
+        fi
+        rm -f "$APP_PID_FILE"
+    fi
+
+    # Stop watcher process if exists
+    if [ -f "$APP_WATCH_PID_FILE" ]; then
+        local WATCH_PID=$(cat "$APP_WATCH_PID_FILE")
+        if kill -0 "$WATCH_PID" 2>/dev/null; then
+            info "Stopping file watcher (PID: $WATCH_PID)..."
+            kill "$WATCH_PID" 2>/dev/null || true
+            kill -9 "$WATCH_PID" 2>/dev/null || true
+            STOPPED=1
+        fi
+        rm -f "$APP_WATCH_PID_FILE"
+    fi
+
+    # Clean up timestamp file
+    rm -f "$WORKSPACE/.watch_timestamp"
+
+    if [ $STOPPED -eq 1 ]; then
+        success "Application stopped"
+    else
         info "Application is not running"
-        return 0
     fi
-
-    local PID=$(cat "$APP_PID_FILE")
-    info "Stopping application (PID: $PID)..."
-    kill "$PID" 2>/dev/null || true
-
-    # Wait for process to stop
-    local COUNT=0
-    while kill -0 "$PID" 2>/dev/null && [ $COUNT -lt 10 ]; do
-        sleep 1
-        COUNT=$((COUNT + 1))
-    done
-
-    if kill -0 "$PID" 2>/dev/null; then
-        warn "Force killing application..."
-        kill -9 "$PID" 2>/dev/null || true
-    fi
-
-    rm -f "$APP_PID_FILE"
-    success "Application stopped"
 }
 
 app_restart() {
@@ -155,11 +180,28 @@ app_status() {
         local PID=$(cat "$APP_PID_FILE")
         echo "Status: RUNNING"
         echo "PID: $PID"
+        
+        # Check if it's Maven or JAR
+        if ps -p "$PID" -o command= | grep -q "mvn"; then
+            echo "Mode: DEVELOPMENT (mvn spring-boot:run)"
+        else
+            echo "Mode: PRODUCTION (JAR)"
+        fi
+        
         echo "Internal: http://localhost:${DEV_PORT}/"
         echo "External: http://localhost:${DEV_PORT_HOST}/"
         echo ""
         echo "Process info:"
         ps -p "$PID" -o pid,ppid,%cpu,%mem,etime,command 2>/dev/null || true
+        
+        # Show watcher if exists
+        if [ -f "$APP_WATCH_PID_FILE" ]; then
+            local WATCH_PID=$(cat "$APP_WATCH_PID_FILE")
+            if kill -0 "$WATCH_PID" 2>/dev/null; then
+                echo ""
+                echo "File watcher: RUNNING (PID: $WATCH_PID)"
+            fi
+        fi
     else
         echo "Status: STOPPED"
     fi
@@ -186,8 +228,14 @@ app_is_running() {
 
 app_run() {
     load_env
+    
+    if app_is_running; then
+        warn "Application is already running (PID: $(cat $APP_PID_FILE))"
+        info "Use 'cmd app stop' to stop it first"
+        return 0
+    fi
+
     info "Starting Spring Boot in development mode with auto-reload..."
-    info "DevTools enabled - save a Java file and it will auto-reload"
     cd "$WORKSPACE"
 
     # Create timestamp file for tracking changes
@@ -208,12 +256,31 @@ app_run() {
         done
     ) &
     WATCH_PID=$!
+    echo $WATCH_PID > "$APP_WATCH_PID_FILE"
 
-    # Trap to kill watcher on exit
-    trap "kill $WATCH_PID 2>/dev/null || true; rm -f $TIMESTAMP_FILE" EXIT
+    info "File watcher started (PID: $WATCH_PID)"
+    info "DevTools enabled - save a Java file and it will auto-reload"
 
-    # Start Spring Boot
-    mvn spring-boot:run
+    # Start Spring Boot in background
+    nohup mvn spring-boot:run > "$WORKSPACE/app.log" 2>&1 &
+    MAVEN_PID=$!
+    echo $MAVEN_PID > "$APP_PID_FILE"
+
+    sleep 3
+    if app_is_running; then
+        success "Application started in development mode (PID: $MAVEN_PID)"
+        info "Log: $WORKSPACE/app.log"
+        info "Internal: http://localhost:${DEV_PORT}/"
+        info "External: http://localhost:${DEV_PORT_HOST}/"
+        info "Use 'cmd app stop' to stop the application"
+        info "Use 'tail -f app.log' to follow the logs"
+    else
+        # Clean up watcher if app failed to start
+        kill $WATCH_PID 2>/dev/null || true
+        rm -f "$APP_WATCH_PID_FILE"
+        rm -f "$TIMESTAMP_FILE"
+        error "Failed to start application. Check app.log"
+    fi
 }
 
 # ============================================================================
@@ -236,7 +303,7 @@ gui_build() {
     success "GUI build completed (output: src/main/resources/static/)"
 }
 
-gui_start() {
+gui_run() {
     load_env
 
     if gui_is_running; then
@@ -289,7 +356,7 @@ gui_stop() {
 gui_restart() {
     gui_stop
     sleep 1
-    gui_start
+    gui_run
 }
 
 gui_status() {
@@ -681,10 +748,10 @@ sync_repo() {
         [ -z "$line" ] && continue
         case "$line" in \#*) continue ;; esac
 
-        ORIG=$(echo "$line" | cut -d';' -f1)
-        DEST=$(echo "$line" | cut -d';' -f2)
-        INCLUDE_ENTRIES=$(echo "$line" | cut -d';' -f3)
-        EXCLUDE_ENTRIES=$(echo "$line" | cut -d';' -f4)
+        ORIG=$(echo "$line" | cut -d;\ -f1)
+        DEST=$(echo "$line" | cut -d;\ -f2)
+        INCLUDE_ENTRIES=$(echo "$line" | cut -d;\ -f3)
+        EXCLUDE_ENTRIES=$(echo "$line" | cut -d;\ -f4)
 
         info "  Syncing: $ORIG -> $DEST"
 
@@ -761,8 +828,8 @@ case "$1" in
             build)
                 gui_build
                 ;;
-            start)
-                gui_start
+            run)
+                gui_run
                 ;;
             stop)
                 gui_stop
@@ -774,7 +841,7 @@ case "$1" in
                 gui_status
                 ;;
             *)
-                error "Unknown gui command: $2. Use: build, start, stop, restart, status"
+                error "Unknown gui command: $2. Use: build, run, stop, restart, status"
                 ;;
         esac
         ;;
