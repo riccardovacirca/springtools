@@ -111,7 +111,7 @@ echo "Configurazione caricata da .env"
 
 # Variabili derivate per sviluppo
 DEV_NETWORK="$PROJECT_NAME$DEV_NETWORK_SUFFIX"
-DEV_CONTAINER="$PROJECT_NAME-dev"
+DEV_CONTAINER="$PROJECT_NAME"
 
 # Variabili derivate per database containers
 MARIADB_CONTAINER="$PROJECT_NAME-mariadb"

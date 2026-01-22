@@ -1,6 +1,8 @@
 *
 !archetype
 !archetype/**
+!docs
+!docs/**
 !install.sh
 !.gitignore
 !README.md

@@ -6,5 +6,5 @@
 - esiste un file app.log egui.log nella root. verificare dove vengono generati
   e fare in modo che venga generato in logs
 - se possibile anche .watch_timestamp dovrebbe stare in tmp
-- rinominare il container generato mediante il dile install.sh rimuovendo
+- rinominare il container generato mediante il file install.sh rimuovendo
   il suffisso -dev

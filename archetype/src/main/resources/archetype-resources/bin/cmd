@@ -70,8 +70,8 @@ HELPEOF
 # App Operations (Spring Boot)
 # ============================================================================
 
-APP_PID_FILE="$WORKSPACE/.app.pid"
-APP_WATCH_PID_FILE="$WORKSPACE/.app.watch.pid"
+APP_PID_FILE="$WORKSPACE/tmp/app.pid"
+APP_WATCH_PID_FILE="$WORKSPACE/tmp/app.watch.pid"
 
 app_build() {
     load_env
@@ -97,17 +97,17 @@ app_start() {
 
     info "Starting Spring Boot application..."
     cd "$WORKSPACE"
-    nohup java -jar "$JAR_FILE" > "$WORKSPACE/app.log" 2>&1 &
+    nohup java -jar "$JAR_FILE" > "$WORKSPACE/logs/app.log" 2>&1 &
     echo $! > "$APP_PID_FILE"
 
     sleep 2
     if app_is_running; then
         success "Application started (PID: $(cat $APP_PID_FILE))"
-        info "Log: $WORKSPACE/app.log"
+        info "Log: $WORKSPACE/logs/app.log"
         info "Internal: http://localhost:${DEV_PORT}/"
         info "External: http://localhost:${DEV_PORT_HOST}/"
     else
-        error "Failed to start application. Check app.log"
+        error "Failed to start application. Check logs/app.log"
     fi
 }
 
@@ -239,7 +239,7 @@ app_run() {
     cd "$WORKSPACE"
 
     # Create timestamp file for tracking changes
-    TIMESTAMP_FILE="$WORKSPACE/.watch_timestamp"
+    TIMESTAMP_FILE="$WORKSPACE/tmp/.watch_timestamp"
     touch "$TIMESTAMP_FILE"
 
     # Start a background process to watch for changes and compile
@@ -262,24 +262,24 @@ app_run() {
     info "DevTools enabled - save a Java file and it will auto-reload"
 
     # Start Spring Boot in background
-    nohup mvn spring-boot:run > "$WORKSPACE/app.log" 2>&1 &
+    nohup mvn spring-boot:run > "$WORKSPACE/logs/app.log" 2>&1 &
     MAVEN_PID=$!
     echo $MAVEN_PID > "$APP_PID_FILE"
 
     sleep 3
     if app_is_running; then
         success "Application started in development mode (PID: $MAVEN_PID)"
-        info "Log: $WORKSPACE/app.log"
+        info "Log: $WORKSPACE/logs/app.log"
         info "Internal: http://localhost:${DEV_PORT}/"
         info "External: http://localhost:${DEV_PORT_HOST}/"
         info "Use 'cmd app stop' to stop the application"
-        info "Use 'tail -f app.log' to follow the logs"
+        info "Use 'tail -f logs/app.log' to follow the logs"
     else
         # Clean up watcher if app failed to start
         kill $WATCH_PID 2>/dev/null || true
         rm -f "$APP_WATCH_PID_FILE"
         rm -f "$TIMESTAMP_FILE"
-        error "Failed to start application. Check app.log"
+        error "Failed to start application. Check logs/app.log"
     fi
 }
 
@@ -287,7 +287,7 @@ app_run() {
 # GUI Operations (Vite/Svelte)
 # ============================================================================
 
-GUI_PID_FILE="$WORKSPACE/.gui.pid"
+GUI_PID_FILE="$WORKSPACE/tmp/gui.pid"
 GUI_DIR="$WORKSPACE/gui"
 
 gui_build() {
@@ -317,17 +317,17 @@ gui_run() {
 
     info "Starting Vite dev server..."
     cd "$GUI_DIR"
-    nohup npm run dev > "$WORKSPACE/gui.log" 2>&1 &
+    nohup npm run dev > "$WORKSPACE/logs/gui.log" 2>&1 &
     echo $! > "$GUI_PID_FILE"
 
     sleep 2
     if gui_is_running; then
         success "Vite dev server started (PID: $(cat $GUI_PID_FILE))"
-        info "Log: $WORKSPACE/gui.log"
+        info "Log: $WORKSPACE/logs/gui.log"
         info "URL: http://localhost:${VITE_PORT}/"
         info "API proxy: /api/* -> http://localhost:${DEV_PORT}/"
     else
-        error "Failed to start Vite. Check gui.log"
+        error "Failed to start Vite. Check logs/gui.log"
     fi
 }
 
