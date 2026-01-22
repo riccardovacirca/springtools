@@ -632,9 +632,9 @@ else
 fi
 
 echo "Pulizia file di installazione..."
-rm -rf archetype
-rm -f TODO.md
-rm -f install.sh
+docker exec "$DEV_CONTAINER" rm -rf archetype
+docker exec "$DEV_CONTAINER" rm -f TODO.md
+docker exec "$DEV_CONTAINER" rm -f install.sh
 echo "File di installazione rimossi (disponibili in .toolchain/)"
 
 
