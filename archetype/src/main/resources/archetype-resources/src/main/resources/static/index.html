@@ -7,7 +7,7 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 600px;
+            max-width: 800px;
             margin: 50px auto;
             padding: 20px;
             background: #f5f5f5;
@@ -37,44 +37,70 @@
             border-radius: 4px;
             display: none;
         }
+        .status-section {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            border-left: 4px solid #28a745;
+        }
+        .log-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+            border-left: 3px solid #007bff;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Spring Boot Demo</h1>
-        <p>Clicca il pulsante per chiamare l'endpoint REST:</p>
-        <button onclick="fetchHello()">Chiama /api/hello</button>
+        <h1>Spring Boot Status Monitor</h1>
+        <p>Clicca il pulsante per verificare lo status dell'applicazione:</p>
+        <button onclick="fetchStatus()">Controlla Status</button>
         <div id="response"></div>
     </div>
 
     <script>
-        async function fetchHello() {
+        async function fetchStatus() {
             const responseDiv = document.getElementById('response');
             try {
-                const response = await fetch('/api/hello');
-                const data = await response.json();
+                // Fetch health status
+                const healthResponse = await fetch('/api/status/health');
+                const healthData = await healthResponse.json();
+
+                // Fetch logs
+                const logsResponse = await fetch('/api/status/logs?num=10&off=0');
+                const logsData = await logsResponse.json();
+
                 responseDiv.style.display = 'block';
 
-                let messagesHtml = '<div style="margin-top: 15px;">';
-                data.messages.forEach(msg => {
-                    messagesHtml += `
-                        <div style="margin-bottom: 10px; padding: 10px; background: #f0f0f0; border-radius: 4px;">
-                            <strong>${msg.title}</strong><br>
-                            <small style="color: #666;">by ${msg.author} - ${msg.created_at}</small><br>
-                            <p style="margin: 5px 0 0 0;">${msg.content}</p>
-                        </div>
-                    `;
-                });
-                messagesHtml += '</div>';
-
-                responseDiv.innerHTML = `
-                    <strong>Risposta dall'API:</strong><br>
-                    Database: ${data.database}<br>
-                    Migration: ${data.migration}<br>
-                    Timestamp: ${data.timestamp}<br>
-                    <strong>Messaggi dal database:</strong>
-                    ${messagesHtml}
+                // Build health section
+                let healthHtml = `
+                    <div class="status-section">
+                        <h3>🏥 Health Status</h3>
+                        <strong>Status:</strong> ${healthData.status}
+                    </div>
                 `;
+
+                // Build logs section
+                let logsHtml = '<div class="status-section" style="border-left-color: #007bff;"><h3>📝 Recent Logs</h3>';
+                if (logsData && logsData.length > 0) {
+                    logsData.forEach(log => {
+                        logsHtml += `
+                            <div class="log-item">
+                                <strong>ID:</strong> ${log.id}<br>
+                                <strong>Message:</strong> ${log.message}<br>
+                                <small style="color: #666;">Created: ${new Date(log.createdAt).toLocaleString('it-IT')}</small>
+                            </div>
+                        `;
+                    });
+                } else {
+                    logsHtml += '<p>Nessun log disponibile</p>';
+                }
+                logsHtml += '</div>';
+
+                responseDiv.innerHTML = healthHtml + logsHtml;
             } catch (error) {
                 responseDiv.style.display = 'block';
                 responseDiv.innerHTML = `<strong>Errore:</strong> ${error.message}`;

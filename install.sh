@@ -216,6 +216,57 @@ create_pgsql_container() {
     echo "  Password: $PGSQL_ROOT_PASSWORD"
 }
 
+install_claude() {
+    echo "Verifica installazione Claude Code..."
+    
+    if docker exec "$DEV_CONTAINER" sh -c "command -v claude >/dev/null 2>&1"; then
+        echo "Claude Code già installato."
+        return 0
+    fi
+    
+    if ! docker exec "$DEV_CONTAINER" sh -c "command -v node >/dev/null 2>&1"; then
+        echo "ERRORE: Node.js non trovato nel container."
+        echo "Node.js verrà installato durante la generazione dell'applicazione (./install.sh --dev)"
+        return 1
+    fi
+    
+    echo "Installazione Claude Code CLI..."
+    if ! docker exec "$DEV_CONTAINER" npm install -g @anthropic-ai/claude-code; then
+        echo "ERRORE: Installazione Claude Code fallita."
+        return 1
+    fi
+    
+    if ! docker exec "$DEV_CONTAINER" sh -c "command -v claude >/dev/null 2>&1"; then
+        echo "ERRORE: Verifica installazione Claude Code fallita."
+        return 1
+    fi
+    
+    # Copy Claude Code configuration from archetype if exists
+    if [ -d "springtools/archetype/src/main/resources/archetype-resources/.claude" ]; then
+        echo "Installazione configurazione Claude Code..."
+        
+        # Preserve settings.local.json if exists
+        if [ -f ".claude/settings.local.json" ]; then
+            cp .claude/settings.local.json /tmp/claude-settings.local.json.bak
+        fi
+        
+        rm -rf .claude
+        cp -r springtools/archetype/src/main/resources/archetype-resources/.claude .claude
+        
+        # Restore settings.local.json
+        if [ -f "/tmp/claude-settings.local.json.bak" ]; then
+            cp /tmp/claude-settings.local.json.bak .claude/settings.local.json
+            rm /tmp/claude-settings.local.json.bak
+            echo "Preservato settings.local.json esistente"
+        fi
+        
+        echo "Configurazione Claude Code installata in .claude/"
+    fi
+    
+    echo "Claude Code installato con successo."
+    echo "Usa 'docker exec -it $DEV_CONTAINER claude' per avviare Claude Code CLI"
+}
+
 # Gestione opzione --origin
 if [ "$1" = "--origin" ]; then
     echo "Clonazione repository originale..."
@@ -555,7 +606,11 @@ docker exec "$DEV_CONTAINER" sh -c "
 "
 
 echo "Installazione dipendenze Svelte..."
+
 docker exec "$DEV_CONTAINER" sh -c "cd gui && npm install >/dev/null 2>&1"
+
+echo "Installazione Claude Code CLI..."
+install_claude
 
 echo "Configurazione comando cmd..."
 docker exec "$DEV_CONTAINER" sh -c "
@@ -636,60 +691,3 @@ docker exec "$DEV_CONTAINER" rm -rf archetype
 docker exec "$DEV_CONTAINER" rm -f TODO.md
 docker exec "$DEV_CONTAINER" rm -f install.sh
 echo "File di installazione rimossi (disponibili in .toolchain/)"
-
-
-
-# Install Claude Code CLI in the dev container
-# - Checks if Claude Code is already installed
-# - Installs via npm if not present
-# - Optionally copies configuration from archetype
-install_claude() {
-    echo "Verifica installazione Claude Code..."
-    
-    if docker exec "$DEV_CONTAINER" sh -c "command -v claude >/dev/null 2>&1"; then
-        echo "Claude Code già installato."
-        return 0
-    fi
-    
-    if ! docker exec "$DEV_CONTAINER" sh -c "command -v node >/dev/null 2>&1"; then
-        echo "ERRORE: Node.js non trovato nel container."
-        echo "Node.js verrà installato durante la generazione dell'applicazione (./install.sh --dev)"
-        return 1
-    fi
-    
-    echo "Installazione Claude Code CLI..."
-    if ! docker exec "$DEV_CONTAINER" npm install -g @anthropic-ai/claude-code; then
-        echo "ERRORE: Installazione Claude Code fallita."
-        return 1
-    fi
-    
-    if ! docker exec "$DEV_CONTAINER" sh -c "command -v claude >/dev/null 2>&1"; then
-        echo "ERRORE: Verifica installazione Claude Code fallita."
-        return 1
-    fi
-    
-    # Copy Claude Code configuration from archetype if exists
-    if [ -d "springtools/archetype/src/main/resources/archetype-resources/.claude" ]; then
-        echo "Installazione configurazione Claude Code..."
-        
-        # Preserve settings.local.json if exists
-        if [ -f ".claude/settings.local.json" ]; then
-            cp .claude/settings.local.json /tmp/claude-settings.local.json.bak
-        fi
-        
-        rm -rf .claude
-        cp -r springtools/archetype/src/main/resources/archetype-resources/.claude .claude
-        
-        # Restore settings.local.json
-        if [ -f "/tmp/claude-settings.local.json.bak" ]; then
-            cp /tmp/claude-settings.local.json.bak .claude/settings.local.json
-            rm /tmp/claude-settings.local.json.bak
-            echo "Preservato settings.local.json esistente"
-        fi
-        
-        echo "Configurazione Claude Code installata in .claude/"
-    fi
-    
-    echo "Claude Code installato con successo."
-    echo "Usa 'docker exec -it $DEV_CONTAINER claude' per avviare Claude Code CLI"
-}
