@@ -102,7 +102,7 @@
             </includes>
         </fileSet>
 
-        <!-- Cartelle data e logs -->
+        <!-- Cartelle data, logs e tmp -->
         <fileSet filtered="false" packaged="false">
             <directory>data</directory>
             <includes>
@@ -116,6 +116,14 @@
                 <include>.gitkeep</include>
             </includes>
         </fileSet>
+
+        <fileSet filtered="false" packaged="false">
+            <directory>tmp</directory>
+            <includes>
+                <include>.gitkeep</include>
+            </includes>
+        </fileSet>
+
         <!-- VSCode configuration -->
         <fileSet filtered="true" packaged="false">
             <directory>.vscode</directory>
