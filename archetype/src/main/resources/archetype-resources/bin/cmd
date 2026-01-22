@@ -397,25 +397,18 @@ gui_is_running() {
 }
 
 # ============================================================================
+
+# ============================================================================
 # Git Operations
 # ============================================================================
+
+# Simplified git functions - uses git remote URL to get repo name
 
 # Updates a git repository (stage, commit, push)
 update_git_repo() {
     local REPO_DIR="$1"
-    local REPO_NAME="$2"
 
     info "Updating repository in $REPO_DIR..."
-
-    if [ ! -d "$REPO_DIR" ]; then
-        warn "Directory $REPO_DIR does not exist, skipping"
-        return 0
-    fi
-
-    if [ ! -d "$REPO_DIR/.git" ]; then
-        warn "$REPO_DIR is not a git repository, skipping"
-        return 0
-    fi
 
     cd "$REPO_DIR"
 
@@ -423,7 +416,6 @@ update_git_repo() {
     git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
     git config user.name "$GIT_USER"
     git config user.email "$GIT_EMAIL"
-    #git remote set-url origin "https://${GIT_USER}:${GIT_TOKEN}@github.com/${GIT_USER}/${REPO_NAME}.git"
 
     # Stage changes
     info "  Staging changes..."
@@ -455,19 +447,8 @@ update_git_repo() {
 # Pulls changes from git repository
 pull_git_repo() {
     local REPO_DIR="$1"
-    local REPO_NAME="$2"
 
     info "Pulling repository in $REPO_DIR..."
-
-    if [ ! -d "$REPO_DIR" ]; then
-        warn "Directory $REPO_DIR does not exist, skipping"
-        return 0
-    fi
-
-    if [ ! -d "$REPO_DIR/.git" ]; then
-        warn "$REPO_DIR is not a git repository, skipping"
-        return 0
-    fi
 
     cd "$REPO_DIR"
 
@@ -475,7 +456,6 @@ pull_git_repo() {
     git config --global --add safe.directory "$REPO_DIR" 2>/dev/null || true
     git config user.name "$GIT_USER"
     git config user.email "$GIT_EMAIL"
-    # git remote set-url origin "https://${GIT_USER}:${GIT_TOKEN}@github.com/${GIT_USER}/${REPO_NAME}.git"
 
     # Pull from remote
     info "  Pulling from remote..."
@@ -490,48 +470,40 @@ pull_git_repo() {
     cd "$WORKSPACE"
 }
 
-# Resolve repo path and name from -r option
-resolve_repo() {
-    local REPO_PATH="$1"
-
-    if [ -z "$REPO_PATH" ]; then
-        # Default: project root
-        GIT_REPO_DIR="$WORKSPACE"
-        GIT_REPO_NAME="${PROJECT_NAME}"
-    else
-        # Custom path specified with -r
-        if [[ "$REPO_PATH" = /* ]]; then
-            GIT_REPO_DIR="$REPO_PATH"
-        else
-            GIT_REPO_DIR="$WORKSPACE/$REPO_PATH"
-        fi
-        # Derive repo name from folder name (remove leading dot if present)
-        local FOLDER_NAME=$(basename "$GIT_REPO_DIR")
-        FOLDER_NAME="${FOLDER_NAME#.}"
-        GIT_REPO_NAME="${PROJECT_NAME}-${FOLDER_NAME}"
-    fi
-}
-
 # Push changes to git repository
 git_push() {
     local REPO_PATH="$1"
     load_env
-    resolve_repo "$REPO_PATH"
+
+    # Determine repo directory
+    if [ -z "$REPO_PATH" ]; then
+        GIT_REPO_DIR="$WORKSPACE"
+    elif [[ "$REPO_PATH" = /* ]]; then
+        GIT_REPO_DIR="$REPO_PATH"
+    else
+        GIT_REPO_DIR="$WORKSPACE/$REPO_PATH"
+    fi
+
+    # Check if git repo exists
+    if [ ! -d "$GIT_REPO_DIR/.git" ]; then
+        error "$GIT_REPO_DIR is not a git repository"
+    fi
+
+    # Get repo name from git remote URL
+    REPO_NAME=$(basename -s .git "$(git -C "$GIT_REPO_DIR" config --get remote.origin.url 2>/dev/null)")
+    
+    if [ -z "$REPO_NAME" ]; then
+        error "Cannot determine repository name. No remote.origin.url found in $GIT_REPO_DIR"
+    fi
 
     [ -z "$GIT_USER" ] && error "GIT_USER not set in .env file"
     [ -z "$GIT_EMAIL" ] && error "GIT_EMAIL not set in .env file"
     [ -z "$GIT_TOKEN" ] && error "GIT_TOKEN not set in .env file"
 
-    confirm "Push changes to remote ($GIT_REPO_DIR)?" || exit 0
+    confirm "Push changes to remote ($REPO_NAME at $GIT_REPO_DIR)?" || exit 0
 
-    info "Starting git push..."
-
-    if [ -d "$GIT_REPO_DIR/.git" ]; then
-        update_git_repo "$GIT_REPO_DIR" "$GIT_REPO_NAME"
-    else
-        error "$GIT_REPO_DIR is not a git repository"
-    fi
-
+    info "Starting git push for $REPO_NAME..."
+    update_git_repo "$GIT_REPO_DIR"
     info "Git push completed"
 }
 
@@ -539,22 +511,36 @@ git_push() {
 git_pull() {
     local REPO_PATH="$1"
     load_env
-    resolve_repo "$REPO_PATH"
+
+    # Determine repo directory
+    if [ -z "$REPO_PATH" ]; then
+        GIT_REPO_DIR="$WORKSPACE"
+    elif [[ "$REPO_PATH" = /* ]]; then
+        GIT_REPO_DIR="$REPO_PATH"
+    else
+        GIT_REPO_DIR="$WORKSPACE/$REPO_PATH"
+    fi
+
+    # Check if git repo exists
+    if [ ! -d "$GIT_REPO_DIR/.git" ]; then
+        error "$GIT_REPO_DIR is not a git repository"
+    fi
+
+    # Get repo name from git remote URL
+    REPO_NAME=$(basename -s .git "$(git -C "$GIT_REPO_DIR" config --get remote.origin.url 2>/dev/null)")
+    
+    if [ -z "$REPO_NAME" ]; then
+        error "Cannot determine repository name. No remote.origin.url found in $GIT_REPO_DIR"
+    fi
 
     [ -z "$GIT_USER" ] && error "GIT_USER not set in .env file"
     [ -z "$GIT_EMAIL" ] && error "GIT_EMAIL not set in .env file"
     [ -z "$GIT_TOKEN" ] && error "GIT_TOKEN not set in .env file"
 
-    confirm "Pull changes from remote ($GIT_REPO_DIR)?" || exit 0
+    confirm "Pull changes from remote ($REPO_NAME at $GIT_REPO_DIR)?" || exit 0
 
-    info "Starting git pull..."
-
-    if [ -d "$GIT_REPO_DIR/.git" ]; then
-        pull_git_repo "$GIT_REPO_DIR" "$GIT_REPO_NAME"
-    else
-        error "$GIT_REPO_DIR is not a git repository"
-    fi
-
+    info "Starting git pull for $REPO_NAME..."
+    pull_git_repo "$GIT_REPO_DIR"
     info "Git pull completed"
 }
 
@@ -562,23 +548,37 @@ git_pull() {
 git_sync() {
     local REPO_PATH="$1"
     load_env
-    resolve_repo "$REPO_PATH"
+
+    # Determine repo directory
+    if [ -z "$REPO_PATH" ]; then
+        GIT_REPO_DIR="$WORKSPACE"
+    elif [[ "$REPO_PATH" = /* ]]; then
+        GIT_REPO_DIR="$REPO_PATH"
+    else
+        GIT_REPO_DIR="$WORKSPACE/$REPO_PATH"
+    fi
+
+    # Check if git repo exists
+    if [ ! -d "$GIT_REPO_DIR/.git" ]; then
+        error "$GIT_REPO_DIR is not a git repository"
+    fi
+
+    # Get repo name from git remote URL
+    REPO_NAME=$(basename -s .git "$(git -C "$GIT_REPO_DIR" config --get remote.origin.url 2>/dev/null)")
+    
+    if [ -z "$REPO_NAME" ]; then
+        error "Cannot determine repository name. No remote.origin.url found in $GIT_REPO_DIR"
+    fi
 
     [ -z "$GIT_USER" ] && error "GIT_USER not set in .env file"
     [ -z "$GIT_EMAIL" ] && error "GIT_EMAIL not set in .env file"
     [ -z "$GIT_TOKEN" ] && error "GIT_TOKEN not set in .env file"
 
-    confirm "Sync repository (pull + commit + push) ($GIT_REPO_DIR)?" || exit 0
+    confirm "Sync repository ($REPO_NAME at $GIT_REPO_DIR)?" || exit 0
 
-    info "Starting git sync..."
-
-    if [ -d "$GIT_REPO_DIR/.git" ]; then
-        pull_git_repo "$GIT_REPO_DIR" "$GIT_REPO_NAME"
-        update_git_repo "$GIT_REPO_DIR" "$GIT_REPO_NAME"
-    else
-        error "$GIT_REPO_DIR is not a git repository"
-    fi
-
+    info "Starting git sync for $REPO_NAME..."
+    pull_git_repo "$GIT_REPO_DIR"
+    update_git_repo "$GIT_REPO_DIR"
     info "Git sync completed"
 }
 
@@ -587,19 +587,35 @@ git_branch() {
     local BRANCH_NAME="$1"
     local REPO_PATH="$2"
     load_env
-    resolve_repo "$REPO_PATH"
 
     [ -z "$BRANCH_NAME" ] && error "Branch name is required. Use: cmd git branch -b <branch-name>"
+
+    # Determine repo directory
+    if [ -z "$REPO_PATH" ]; then
+        GIT_REPO_DIR="$WORKSPACE"
+    elif [[ "$REPO_PATH" = /* ]]; then
+        GIT_REPO_DIR="$REPO_PATH"
+    else
+        GIT_REPO_DIR="$WORKSPACE/$REPO_PATH"
+    fi
+
+    # Check if git repo exists
+    if [ ! -d "$GIT_REPO_DIR/.git" ]; then
+        error "$GIT_REPO_DIR is not a git repository"
+    fi
+
+    # Get repo name from git remote URL
+    REPO_NAME=$(basename -s .git "$(git -C "$GIT_REPO_DIR" config --get remote.origin.url 2>/dev/null)")
+    
+    if [ -z "$REPO_NAME" ]; then
+        error "Cannot determine repository name. No remote.origin.url found in $GIT_REPO_DIR"
+    fi
 
     [ -z "$GIT_USER" ] && error "GIT_USER not set in .env file"
     [ -z "$GIT_EMAIL" ] && error "GIT_EMAIL not set in .env file"
     [ -z "$GIT_TOKEN" ] && error "GIT_TOKEN not set in .env file"
 
-    if [ ! -d "$GIT_REPO_DIR/.git" ]; then
-        error "$GIT_REPO_DIR is not a git repository"
-    fi
-
-    info "Processing branch '$BRANCH_NAME' in $GIT_REPO_DIR..."
+    info "Processing branch '$BRANCH_NAME' in $REPO_NAME..."
 
     cd "$GIT_REPO_DIR"
 
@@ -607,7 +623,6 @@ git_branch() {
     git config --global --add safe.directory "$GIT_REPO_DIR" 2>/dev/null || true
     git config user.name "$GIT_USER"
     git config user.email "$GIT_EMAIL"
-    # git remote set-url origin "https://${GIT_USER}:${GIT_TOKEN}@github.com/${GIT_USER}/${GIT_REPO_NAME}.git"
 
     # Check if branch exists locally
     if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
@@ -633,7 +648,7 @@ git_branch() {
     fi
 
     cd "$WORKSPACE"
-    success "Git branch operation completed for '$BRANCH_NAME'"
+    success "Git branch operation completed for '$BRANCH_NAME' in $REPO_NAME"
 }
 
 # Merge branch into main and delete
@@ -641,25 +656,41 @@ git_merge() {
     local BRANCH_NAME="$1"
     local REPO_PATH="$2"
     load_env
-    resolve_repo "$REPO_PATH"
 
     [ -z "$BRANCH_NAME" ] && error "Branch name is required. Use: cmd git merge -b <branch-name>"
-
-    [ -z "$GIT_USER" ] && error "GIT_USER not set in .env file"
-    [ -z "$GIT_EMAIL" ] && error "GIT_EMAIL not set in .env file"
-    [ -z "$GIT_TOKEN" ] && error "GIT_TOKEN not set in .env file"
 
     if [ "$BRANCH_NAME" = "main" ] || [ "$BRANCH_NAME" = "master" ]; then
         error "Cannot merge main/master branch into itself"
     fi
 
+    # Determine repo directory
+    if [ -z "$REPO_PATH" ]; then
+        GIT_REPO_DIR="$WORKSPACE"
+    elif [[ "$REPO_PATH" = /* ]]; then
+        GIT_REPO_DIR="$REPO_PATH"
+    else
+        GIT_REPO_DIR="$WORKSPACE/$REPO_PATH"
+    fi
+
+    # Check if git repo exists
     if [ ! -d "$GIT_REPO_DIR/.git" ]; then
         error "$GIT_REPO_DIR is not a git repository"
     fi
 
-    confirm "Merge branch '$BRANCH_NAME' into main and delete it ($GIT_REPO_DIR)?" || exit 0
+    # Get repo name from git remote URL
+    REPO_NAME=$(basename -s .git "$(git -C "$GIT_REPO_DIR" config --get remote.origin.url 2>/dev/null)")
+    
+    if [ -z "$REPO_NAME" ]; then
+        error "Cannot determine repository name. No remote.origin.url found in $GIT_REPO_DIR"
+    fi
 
-    info "Processing merge of '$BRANCH_NAME' in $GIT_REPO_DIR..."
+    [ -z "$GIT_USER" ] && error "GIT_USER not set in .env file"
+    [ -z "$GIT_EMAIL" ] && error "GIT_EMAIL not set in .env file"
+    [ -z "$GIT_TOKEN" ] && error "GIT_TOKEN not set in .env file"
+
+    confirm "Merge branch '$BRANCH_NAME' into main and delete it ($REPO_NAME at $GIT_REPO_DIR)?" || exit 0
+
+    info "Processing merge of '$BRANCH_NAME' in $REPO_NAME..."
 
     cd "$GIT_REPO_DIR"
 
@@ -667,7 +698,6 @@ git_merge() {
     git config --global --add safe.directory "$GIT_REPO_DIR" 2>/dev/null || true
     git config user.name "$GIT_USER"
     git config user.email "$GIT_EMAIL"
-    # git remote set-url origin "https://${GIT_USER}:${GIT_TOKEN}@github.com/${GIT_USER}/${GIT_REPO_NAME}.git"
 
     # Detect main branch name
     local MAIN_BRANCH="main"
@@ -714,7 +744,7 @@ git_merge() {
 
     cd "$WORKSPACE"
 
-    info "Git merge completed"
+    info "Git merge completed for $REPO_NAME"
     info "Note: Use 'cmd git push' to push merged changes to remote"
 }
 
