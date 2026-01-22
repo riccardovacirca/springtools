@@ -533,10 +533,17 @@ docker exec "$DEV_CONTAINER" sh -c "
         -B
 
     # Sposta i file generati dalla sottocartella alla root
+    # Prima sposta i file visibili
     for f in $PROJECT_NAME/*; do
         [ -e \"\$f\" ] && mv \"\$f\" .
     done
-    rmdir $PROJECT_NAME 2>/dev/null || true
+    # Poi sposta i file nascosti (se esistono)
+    for f in $PROJECT_NAME/.[!.]*; do
+        [ -e \"\$f\" ] && mv \"\$f\" .
+    done
+
+    # Rimuovi la cartella del progetto (anche se non è vuota)
+    rm -rf $PROJECT_NAME
 "
 
 echo "Installazione Node.js nel container..."
