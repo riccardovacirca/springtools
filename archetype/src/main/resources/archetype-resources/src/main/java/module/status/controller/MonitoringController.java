@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/monitoring")
+@RequestMapping("/api/status")
 public class MonitoringController {
 
     private final MonitoringService service;

@@ -36,6 +36,7 @@ Usage: cmd COMMAND [OPTIONS]
 
 App Management (Spring Boot):
   cmd app build                     Build application (mvn package)
+  cmd app run                       Run in dev mode with hot reload (mvn spring-boot:run)
   cmd app start                     Start application
   cmd app stop                      Stop application
   cmd app restart                   Restart application
@@ -181,6 +182,38 @@ app_is_running() {
         rm -f "$APP_PID_FILE"
     fi
     return 1
+}
+
+app_run() {
+    load_env
+    info "Starting Spring Boot in development mode with auto-reload..."
+    info "DevTools enabled - save a Java file and it will auto-reload"
+    cd "$WORKSPACE"
+
+    # Create timestamp file for tracking changes
+    TIMESTAMP_FILE="$WORKSPACE/.watch_timestamp"
+    touch "$TIMESTAMP_FILE"
+
+    # Start a background process to watch for changes and compile
+    (
+        while true; do
+            sleep 2
+            # Check if any Java file is newer than our timestamp
+            if find src/main/java -name '*.java' -newer "$TIMESTAMP_FILE" 2>/dev/null | grep -q .; then
+                echo "[WATCH] Detected changes, recompiling..."
+                touch "$TIMESTAMP_FILE"
+                mvn compile -q 2>&1 | grep -v "^\[INFO\]" || true
+                echo "[WATCH] Compilation done"
+            fi
+        done
+    ) &
+    WATCH_PID=$!
+
+    # Trap to kill watcher on exit
+    trap "kill $WATCH_PID 2>/dev/null || true; rm -f $TIMESTAMP_FILE" EXIT
+
+    # Start Spring Boot
+    mvn spring-boot:run
 }
 
 # ============================================================================
@@ -703,6 +736,9 @@ case "$1" in
             build)
                 app_build
                 ;;
+            run)
+                app_run
+                ;;
             start)
                 app_start
                 ;;
@@ -716,7 +752,7 @@ case "$1" in
                 app_status
                 ;;
             *)
-                error "Unknown app command: $2. Use: build, start, stop, restart, status"
+                error "Unknown app command: $2. Use: build, run, start, stop, restart, status"
                 ;;
         esac
         ;;
