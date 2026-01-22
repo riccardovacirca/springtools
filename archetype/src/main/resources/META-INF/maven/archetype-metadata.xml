@@ -29,6 +29,7 @@
                 <include>pom.xml</include>
                 <include>.gitignore</include>
                 <include>README.md</include>
+                <include>.env.example</include>
             </includes>
         </fileSet>
 
@@ -115,5 +116,13 @@
                 <include>.gitkeep</include>
             </includes>
         </fileSet>
+        <!-- VSCode configuration -->
+        <fileSet filtered="true" packaged="false">
+            <directory>.vscode</directory>
+            <includes>
+                <include>**/*</include>
+            </includes>
+        </fileSet>
+
     </fileSets>
 </archetype-descriptor>

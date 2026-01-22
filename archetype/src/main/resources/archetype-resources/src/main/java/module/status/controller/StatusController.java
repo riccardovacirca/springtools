@@ -1,34 +1,34 @@
 package ${package}.module.status.controller;
 
-import ${package}.module.status.dto.MonitoringLogDto;
-import ${package}.module.status.dto.HealthDto;
-import ${package}.module.status.service.MonitoringService;
+import ${package}.module.status.dto.StatusLogDto;
+import ${package}.module.status.dto.StatusHealthDto;
+import ${package}.module.status.service.StatusService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/status")
-public class MonitoringController {
+public class StatusController {
 
-    private final MonitoringService service;
+    private final StatusService service;
 
-    public MonitoringController(MonitoringService service) {
+    public StatusController(StatusService service) {
         this.service = service;
     }
 
     @GetMapping("/health")
-    public HealthDto health() {
+    public StatusHealthDto health() {
         return service.getHealth();
     }
 
     @PostMapping("/log")
-    public MonitoringLogDto log(@RequestBody String message) throws Exception {
+    public StatusLogDto log(@RequestBody String message) throws Exception {
         return service.log(message);
     }
 
     @GetMapping("/logs")
-    public List<MonitoringLogDto> logs(
+    public List<StatusLogDto> logs(
             @RequestParam(defaultValue = "10") int num,
             @RequestParam(defaultValue = "0") int off
     ) throws Exception {

@@ -1,57 +1,56 @@
 # ${artifactId}
 
-Spring Boot application with Svelte/Vite frontend and SQLite database.
+Spring Boot + Svelte/Vite + SQLite
 
-## Prerequisites
+## Deploy da Git
 
-- Java 21
-- Maven 3.x
-- Node.js 20.x (for Svelte GUI)
-
-## Structure
-
-- `src/` - Spring Boot application
-- `gui/` - Svelte/Vite frontend
-- `bin/` - Utility scripts
-- `data/` - SQLite database (auto-created)
-- `logs/` - Application logs
-- `bin/release` - Release script (Docker container for production)
-
-## Run
-
-### Backend (Spring Boot)
 ```bash
-./mvnw spring-boot:run
+# 1. Clona springtools e installa
+git clone https://github.com/riccardovacirca/springtools.git ${artifactId}
+cd ${artifactId}
+./install.sh && ./install.sh --dev
+
+# 2. Configura git e sovrascrivi con progetto reale
+git init
+git remote add origin https://github.com/YOUR_USERNAME/${artifactId}.git
+git fetch origin main && git reset --hard origin/main
+
+# 3. Configura e avvia
+cp .env.example .env
+# Modifica .env con i tuoi secrets
+docker exec -it ${artifactId}-dev cmd run
 ```
 
-Access: http://localhost:8080
+- Backend: http://localhost:8080
+- Frontend: http://localhost:2350
 
-### Frontend (Svelte Dev)
+## Sviluppo
+
 ```bash
-cd gui
-npm install
-npm run dev
+docker exec -it ${artifactId}-dev bash
+cmd run       # Avvia dev
+cmd build     # Build completo
+cmd test      # Test
+cmd release   # Container produzione
 ```
 
-Access: http://localhost:2350
+## Struttura
 
-### Build Frontend for Production
-```bash
-cd gui
-npm run build
-```
+- `src/` - Spring Boot
+- `gui/` - Svelte frontend
+- `bin/` - Script utility
+- `.toolchain/` - Springtools clonato
+- `.env.example` - Template configurazione (copia in `.env`)
 
-This builds the Svelte app into `src/main/resources/static/`
+## API
 
-## API Endpoints
-
-- `GET /api/hello` - Demo endpoint with database query
+- `GET /api/hello` - Demo endpoint
+- `GET /api/status/health` - Health check
+- `POST /api/status/log` - Log message
+- `GET /api/status/logs` - Retrieve logs
 
 ## Database
 
-- SQLite database in `data/${artifactId}.db`
-- Flyway migrations in `src/main/resources/db/migration/`
+SQLite in `data/${artifactId}.db` (migrations in `src/main/resources/db/migration/`)
 
-## Configuration
-
-Edit `.env` file to customize ports and settings.
+Opzionale: MariaDB/PostgreSQL via `./install.sh --mariadb` o `--postgres`

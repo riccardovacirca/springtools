@@ -3,7 +3,7 @@ package ${package}.module.status.dao;
 import ${package}.utils.DB;
 import ${package}.utils.DB.Record;
 import ${package}.utils.DB.Recordset;
-import ${package}.module.status.dto.MonitoringLogDto;
+import ${package}.module.status.dto.StatusLogDto;
 import org.springframework.stereotype.Repository;
 
 import javax.sql.DataSource;
@@ -12,11 +12,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Repository
-public class MonitoringDao {
+public class StatusDao {
 
     private final DataSource dataSource;
 
-    public MonitoringDao(DataSource dataSource) {
+    public StatusDao(DataSource dataSource) {
         this.dataSource = dataSource;
     }
 
@@ -32,15 +32,15 @@ public class MonitoringDao {
         }
     }
 
-    public List<MonitoringLogDto> findLogs(int limit, int offset) throws Exception {
+    public List<StatusLogDto> findLogs(int limit, int offset) throws Exception {
         DB db = new DB(dataSource);
-        List<MonitoringLogDto> logs = new ArrayList<>();
+        List<StatusLogDto> logs = new ArrayList<>();
         try {
             db.open();
             Recordset rs = db.select("SELECT id, message, created_at FROM status_logs ORDER BY id DESC LIMIT ? OFFSET ?",
                     limit, offset);
             for (Record r : rs) {
-                logs.add(new MonitoringLogDto(
+                logs.add(new StatusLogDto(
                         DB.toLong(r.get("id")),
                         DB.toString(r.get("message")),
                         DB.toLocalDateTime(r.get("created_at"))

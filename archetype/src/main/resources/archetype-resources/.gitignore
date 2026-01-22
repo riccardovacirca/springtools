@@ -1,55 +1,34 @@
-# Maven
-target/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-pom.xml.next
-release.properties
-dependency-reduced-pom.xml
-buildNumber.properties
-.mvn/timing.properties
-.mvn/wrapper/maven-wrapper.jar
+*
 
-# Java
-*.class
-*.log
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
-hs_err_pid*
+# include
+!.mvn/
+!.mvn/**
+!bin/
+!bin/**
+!data/
+!data/**
+!gui/
+!gui/**
+!logs/
+!logs/**
+!src/
+!src/**
+!.vscode/
+!.vscode/**
+!.gitignore
+!pom.xml
+!README.md
+!LICENSE
+!.env.example
 
-# IDE
-.idea/
-.vscode/
-*.iml
-*.ipr
-*.iws
-.settings/
-.classpath
-.project
-
-# Node/Svelte/Vite
-node_modules/
-dist/
-.DS_Store
+# exclude
 gui/node_modules/
+gui/node_modules/**
 gui/dist/
-
-# Database
-data/
-*.db
-*.db-journal
-*.db-shm
-*.db-wal
-
-# Spring Boot
-.springtools/
-app.log
-.app.pid
-
-# Env
-.env.local
+gui/dist/**
+.mvn/wrapper/maven-wrapper.jar
+data/*.db
+data/*.db-journal
+data/*.db-shm
+data/*.db-wal
+logs/*.log

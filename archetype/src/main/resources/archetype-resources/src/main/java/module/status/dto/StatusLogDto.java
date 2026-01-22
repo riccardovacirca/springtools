@@ -2,14 +2,14 @@ package ${package}.module.status.dto;
 
 import java.time.LocalDateTime;
 
-public class MonitoringLogDto {
+public class StatusLogDto {
     private Long id;
     private String message;
     private LocalDateTime createdAt;
 
-    public MonitoringLogDto() {}
+    public StatusLogDto() {}
 
-    public MonitoringLogDto(Long id, String message, LocalDateTime createdAt) {
+    public StatusLogDto(Long id, String message, LocalDateTime createdAt) {
         this.id = id;
         this.message = message;
         this.createdAt = createdAt;
