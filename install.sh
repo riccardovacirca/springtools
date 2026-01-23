@@ -586,11 +586,12 @@ docker exec "$DEV_CONTAINER" sh -c "
     # Sposta i file generati dalla sottocartella alla root
     # Prima sposta i file visibili
     for f in $PROJECT_NAME/*; do
-        [ -e \"\$f\" ] && mv \"\$f\" .
+        [ -e \"\$f\" ] && mv -f \"\$f\" .
     done
     # Poi sposta i file nascosti (se esistono)
+    # Usa -f per forzare la sovrascrittura del .gitignore dell'archetipo
     for f in $PROJECT_NAME/.[!.]*; do
-        [ -e \"\$f\" ] && mv \"\$f\" .
+        [ -e \"\$f\" ] && mv -f \"\$f\" .
     done
 
     # Rimuovi la cartella del progetto (anche se non è vuota)
