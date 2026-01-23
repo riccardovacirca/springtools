@@ -53,6 +53,8 @@ Git:
   git push [-r <path>]     Stage, commit and push
   git pull [-r <path>]     Pull from remote
   git sync [-r <path>]     Pull + commit + push
+  git fetch                Initialize repo from remote (only in project root, no .git)
+  git branch [-r <path>]   Show current branch name
   git branch -b <name> [-r <path>] [-f <base-branch>]   Create branch from base (default: main)
   git merge -b <name> [-r <path>]    Merge branch to main and delete
 
@@ -632,14 +634,78 @@ auto_stash_pop() {
     return 1
 }
 
-# Create or switch to a branch
+# Fetch and initialize repo from remote
+git_fetch() {
+    load_env
+
+    # Must be run from project root
+    if [ "$(pwd)" != "$WORKSPACE" ]; then
+        cd "$WORKSPACE"
+    fi
+
+    # Must not have .git folder
+    if [ -d "$WORKSPACE/.git" ]; then
+        error "Git repository already exists. Remove .git folder first if you want to reinitialize."
+    fi
+
+    [ -z "$PROJECT_NAME" ] && error "PROJECT_NAME not set in .env file"
+    [ -z "$GIT_USER" ] && error "GIT_USER not set in .env file"
+    [ -z "$GIT_TOKEN" ] && error "GIT_TOKEN not set in .env file"
+
+    local GIT_URL="https://${GIT_USER}:${GIT_TOKEN}@github.com/${GIT_USER}/${PROJECT_NAME}.git"
+
+    info "Initializing repository from remote..."
+    info "  Project: $PROJECT_NAME"
+    info "  User: $GIT_USER"
+
+    cd "$WORKSPACE"
+
+    info "  Running git init..."
+    git init || error "Failed to initialize git repository"
+
+    info "  Adding remote origin..."
+    git remote add origin "$GIT_URL" || error "Failed to add remote origin"
+
+    info "  Fetching from origin..."
+    git fetch origin || error "Failed to fetch from origin"
+
+    info "  Resetting to origin/main..."
+    git reset --hard origin/main || error "Failed to reset to origin/main"
+
+    info "  Renaming branch to main..."
+    git branch -m master main 2>/dev/null || true
+
+    info "  Setting upstream..."
+    git branch -u origin/main || error "Failed to set upstream"
+
+    success "Repository initialized from remote"
+}
+
+# Show current branch or create/switch to a branch
 git_branch() {
     local BRANCH_NAME="$1"
     local REPO_PATH="$2"
     local BASE_BRANCH="${3:-main}"  # Default to main if not specified
     load_env
 
-    [ -z "$BRANCH_NAME" ] && error "Branch name is required. Use: cmd git branch -b <branch-name>"
+    # If no branch name provided, show current branch
+    if [ -z "$BRANCH_NAME" ]; then
+        # Determine repo directory
+        if [ -z "$REPO_PATH" ]; then
+            GIT_REPO_DIR="$WORKSPACE"
+        elif [[ "$REPO_PATH" = /* ]]; then
+            GIT_REPO_DIR="$REPO_PATH"
+        else
+            GIT_REPO_DIR="$WORKSPACE/$REPO_PATH"
+        fi
+
+        if [ ! -d "$GIT_REPO_DIR/.git" ]; then
+            error "$GIT_REPO_DIR is not a git repository"
+        fi
+
+        git -C "$GIT_REPO_DIR" branch --show-current
+        return 0
+    fi
 
     # Determine repo directory
     if [ -z "$REPO_PATH" ]; then
@@ -1023,6 +1089,9 @@ case "$1" in
             sync)
                 git_sync "$REPO_PATH"
                 ;;
+            fetch)
+                git_fetch
+                ;;
             branch)
                 git_branch "$BRANCH_NAME" "$REPO_PATH" "$BASE_BRANCH"
                 ;;
@@ -1030,7 +1099,7 @@ case "$1" in
                 git_merge "$BRANCH_NAME" "$REPO_PATH"
                 ;;
             *)
-                error "Unknown git command: $GIT_CMD. Use: push, pull, sync, branch, merge"
+                error "Unknown git command: $GIT_CMD. Use: push, pull, sync, fetch, branch, merge"
                 ;;
         esac
         ;;
