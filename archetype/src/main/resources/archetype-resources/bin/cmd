@@ -53,7 +53,7 @@ Git:
   git push [-r <path>]     Stage, commit and push
   git pull [-r <path>]     Pull from remote
   git sync [-r <path>]     Pull + commit + push
-  git branch -b <name> [-r <path>]   Create/switch branch
+  git branch -b <name> [-r <path>] [-f <base-branch>]   Create branch from base (default: main)
   git merge -b <name> [-r <path>]    Merge branch to main and delete
 
 Sync:
@@ -63,6 +63,7 @@ Options:
   -h, --help               Show this help
   -r, --repo <path>        Git repo path (default: project root)
   -b, --branch <name>      Branch name
+  -f, --from <branch>       Base branch (default: main)
 HELPEOF
 }
 
@@ -489,6 +490,9 @@ git_push() {
         error "$GIT_REPO_DIR is not a git repository"
     fi
 
+    # Configure git safe directory
+    git config --global --add safe.directory "$GIT_REPO_DIR" 2>/dev/null || true
+
     # Get repo name from git remote URL
     REPO_NAME=$(basename -s .git "$(git -C "$GIT_REPO_DIR" config --get remote.origin.url 2>/dev/null)")
     
@@ -525,6 +529,9 @@ git_pull() {
     if [ ! -d "$GIT_REPO_DIR/.git" ]; then
         error "$GIT_REPO_DIR is not a git repository"
     fi
+
+    # Configure git safe directory
+    git config --global --add safe.directory "$GIT_REPO_DIR" 2>/dev/null || true
 
     # Get repo name from git remote URL
     REPO_NAME=$(basename -s .git "$(git -C "$GIT_REPO_DIR" config --get remote.origin.url 2>/dev/null)")
@@ -563,6 +570,9 @@ git_sync() {
         error "$GIT_REPO_DIR is not a git repository"
     fi
 
+    # Configure git safe directory
+    git config --global --add safe.directory "$GIT_REPO_DIR" 2>/dev/null || true
+
     # Get repo name from git remote URL
     REPO_NAME=$(basename -s .git "$(git -C "$GIT_REPO_DIR" config --get remote.origin.url 2>/dev/null)")
     
@@ -582,10 +592,51 @@ git_sync() {
     info "Git sync completed"
 }
 
+# Helper: Auto-stash uncommitted changes with branch name
+auto_stash_save() {
+    local CURRENT_BRANCH="$1"
+    local STASH_NAME="autostash-${CURRENT_BRANCH}"
+
+    if ! git diff-index --quiet HEAD -- 2>/dev/null; then
+        info "  Saving uncommitted changes to stash..."
+        git stash push -u -m "$STASH_NAME" >/dev/null 2>&1 || {
+            warn "Failed to stash changes"
+            return 1
+        }
+        success "  Uncommitted changes stashed as '$STASH_NAME'"
+        return 0
+    fi
+    return 1
+}
+
+# Helper: Auto-pop stash for a specific branch
+auto_stash_pop() {
+    local TARGET_BRANCH="$1"
+    local STASH_NAME="autostash-${TARGET_BRANCH}"
+
+    # Check if stash with this name exists
+    if git stash list | grep -q "$STASH_NAME"; then
+        local STASH_INDEX=$(git stash list | grep -n "$STASH_NAME" | head -1 | cut -d: -f1)
+        STASH_INDEX=$((STASH_INDEX - 1))
+
+        info "  Restoring stash '$STASH_NAME'..."
+        if git stash pop "stash@{$STASH_INDEX}" >/dev/null 2>&1; then
+            success "  Uncommitted changes restored"
+            return 0
+        else
+            warn "Failed to restore stash. You may need to resolve conflicts."
+            warn "Run 'git stash list' to see available stashes"
+            return 1
+        fi
+    fi
+    return 1
+}
+
 # Create or switch to a branch
 git_branch() {
     local BRANCH_NAME="$1"
     local REPO_PATH="$2"
+    local BASE_BRANCH="${3:-main}"  # Default to main if not specified
     load_env
 
     [ -z "$BRANCH_NAME" ] && error "Branch name is required. Use: cmd git branch -b <branch-name>"
@@ -604,9 +655,12 @@ git_branch() {
         error "$GIT_REPO_DIR is not a git repository"
     fi
 
+    # Configure git safe directory
+    git config --global --add safe.directory "$GIT_REPO_DIR" 2>/dev/null || true
+
     # Get repo name from git remote URL
     REPO_NAME=$(basename -s .git "$(git -C "$GIT_REPO_DIR" config --get remote.origin.url 2>/dev/null)")
-    
+
     if [ -z "$REPO_NAME" ]; then
         error "Cannot determine repository name. No remote.origin.url found in $GIT_REPO_DIR"
     fi
@@ -615,7 +669,7 @@ git_branch() {
     [ -z "$GIT_EMAIL" ] && error "GIT_EMAIL not set in .env file"
     [ -z "$GIT_TOKEN" ] && error "GIT_TOKEN not set in .env file"
 
-    info "Processing branch '$BRANCH_NAME' in $REPO_NAME..."
+    info "Processing branch '$BRANCH_NAME' from '$BASE_BRANCH' in $REPO_NAME..."
 
     cd "$GIT_REPO_DIR"
 
@@ -624,31 +678,84 @@ git_branch() {
     git config user.name "$GIT_USER"
     git config user.email "$GIT_EMAIL"
 
-    # Check if branch exists locally
+    # Get current branch and auto-stash if needed
+    CURRENT_BRANCH=$(git branch --show-current)
+    STASHED=false
+    if auto_stash_save "$CURRENT_BRANCH"; then
+        STASHED=true
+    fi
+
+    # Check if target branch already exists locally
     if git show-ref --verify --quiet "refs/heads/$BRANCH_NAME"; then
         info "  Branch '$BRANCH_NAME' exists locally, switching..."
         git switch "$BRANCH_NAME" || error "Failed to switch to branch"
-    else
-        info "  Branch '$BRANCH_NAME' does not exist locally, creating..."
-        git switch -c "$BRANCH_NAME" || error "Failed to create branch"
+
+        # Restore stash for this branch if exists
+        auto_stash_pop "$BRANCH_NAME"
+
+        # Check if branch exists on remote and push if not
+        if ! git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
+            info "  Branch '$BRANCH_NAME' does not exist on remote, pushing..."
+            if git push -u origin "$BRANCH_NAME" 2>/dev/null; then
+                success "Branch '$BRANCH_NAME' pushed to remote"
+            else
+                warn "Failed to push branch to remote"
+                cd "$WORKSPACE"
+                return 1
+            fi
+        else
+            info "  Branch '$BRANCH_NAME' already exists on remote"
+        fi
+
+        cd "$WORKSPACE"
+        success "Switched to existing branch '$BRANCH_NAME' in $REPO_NAME"
+        return 0
     fi
 
-    # Check if branch exists on remote
-    if ! git ls-remote --exit-code --heads origin "$BRANCH_NAME" >/dev/null 2>&1; then
-        info "  Branch '$BRANCH_NAME' does not exist on remote, pushing..."
-        if git push -u origin "$BRANCH_NAME" 2>/dev/null; then
-            success "Branch '$BRANCH_NAME' pushed to remote"
+    # Verify base branch exists locally or on remote
+    if ! git show-ref --verify --quiet "refs/heads/$BASE_BRANCH"; then
+        # Check if exists on remote
+        if git ls-remote --exit-code --heads origin "$BASE_BRANCH" >/dev/null 2>&1; then
+            info "  Base branch '$BASE_BRANCH' found on remote, fetching..."
+            git fetch origin "$BASE_BRANCH:$BASE_BRANCH" 2>/dev/null || error "Failed to fetch base branch from remote"
         else
-            warn "Failed to push branch to remote"
-            cd "$WORKSPACE"
-            return 1
+            error "Base branch '$BASE_BRANCH' does not exist locally or on remote"
         fi
+    fi
+
+    # Switch to base branch
+    info "  Switching to base branch '$BASE_BRANCH'..."
+    git switch "$BASE_BRANCH" || error "Failed to switch to base branch '$BASE_BRANCH'"
+
+    # Pull latest changes from base branch
+    info "  Pulling latest changes from '$BASE_BRANCH'..."
+    if git pull origin "$BASE_BRANCH" 2>/dev/null; then
+        info "  Base branch '$BASE_BRANCH' updated"
     else
-        info "  Branch '$BRANCH_NAME' already exists on remote"
+        warn "Failed to pull from remote. Creating branch from local state."
+    fi
+
+    # Create new branch from base
+    info "  Creating new branch '$BRANCH_NAME' from '$BASE_BRANCH'..."
+    git switch -c "$BRANCH_NAME" || error "Failed to create branch '$BRANCH_NAME'"
+
+    # Restore stashed changes from original branch onto the new branch
+    if [ "$STASHED" = true ]; then
+        auto_stash_pop "$CURRENT_BRANCH"
+    fi
+
+    # Push new branch to remote
+    info "  Pushing new branch '$BRANCH_NAME' to remote..."
+    if git push -u origin "$BRANCH_NAME" 2>/dev/null; then
+        success "Branch '$BRANCH_NAME' created and pushed to remote"
+    else
+        warn "Branch created locally but failed to push to remote"
+        cd "$WORKSPACE"
+        return 1
     fi
 
     cd "$WORKSPACE"
-    success "Git branch operation completed for '$BRANCH_NAME' in $REPO_NAME"
+    success "Git branch operation completed for '$BRANCH_NAME' (from '$BASE_BRANCH') in $REPO_NAME"
 }
 
 # Merge branch into main and delete
@@ -676,6 +783,9 @@ git_merge() {
     if [ ! -d "$GIT_REPO_DIR/.git" ]; then
         error "$GIT_REPO_DIR is not a git repository"
     fi
+
+    # Configure git safe directory
+    git config --global --add safe.directory "$GIT_REPO_DIR" 2>/dev/null || true
 
     # Get repo name from git remote URL
     REPO_NAME=$(basename -s .git "$(git -C "$GIT_REPO_DIR" config --get remote.origin.url 2>/dev/null)")
@@ -878,6 +988,7 @@ case "$1" in
     git)
         GIT_CMD="$2"
         REPO_PATH=""
+        BASE_BRANCH=""
         BRANCH_NAME=""
         shift 2
 
@@ -890,6 +1001,10 @@ case "$1" in
                     ;;
                 -b|--branch)
                     BRANCH_NAME="$2"
+                    shift 2
+                    ;;
+                -f|--from)
+                    BASE_BRANCH="$2"
                     shift 2
                     ;;
                 *)
@@ -909,7 +1024,7 @@ case "$1" in
                 git_sync "$REPO_PATH"
                 ;;
             branch)
-                git_branch "$BRANCH_NAME" "$REPO_PATH"
+                git_branch "$BRANCH_NAME" "$REPO_PATH" "$BASE_BRANCH"
                 ;;
             merge)
                 git_merge "$BRANCH_NAME" "$REPO_PATH"
@@ -921,6 +1036,7 @@ case "$1" in
         ;;
     sync)
         REPO_PATH=""
+        BASE_BRANCH=""
         shift 1
 
         # Parse options
