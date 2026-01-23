@@ -7,6 +7,8 @@
 !bin/**
 !data/
 !data/**
+!docs/
+!docs/**
 !gui/
 !gui/**
 !logs/
