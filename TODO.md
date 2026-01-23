@@ -1,5 +1,16 @@
 # TODO
 
+- [x] ~~il file tmp/cmd, proveniente da un diverso contesto applicativo, contiene
+  delle procedure relative al database come l'accesso alla cli per sqlite3,
+  mariadb e postgres, che dovrebbero essere importate nel comando
+  /usr/src/app/bin/cmd locale e contetualizzate per questo progetto. Le stesse
+  modifiche dovrebbero essere propagate nell'archetipo sovrascrivendo il file
+  corrispondente in:
+  /usr/src/app/.toolchain/archetype/src/main/resources/archetype-resources/bin/cmd.~~
+  **RISOLTO**: Aggiunta funzione db_cli() con comandi `cmd db` e `cmd db -f <file>`
+  - SQLite (default), MariaDB e PostgreSQL supportati
+  - Propagato nell'archetype
+
 - [x] ~~il comando cmd git branch senza opzioni deve restituire il nome del branch
   attivo corrente.~~
   **RISOLTO**: Modificata git_branch() per restituire il branch corrente se chiamata senza -b

@@ -58,6 +58,10 @@ Git:
   git branch -b <name> [-r <path>] [-f <base-branch>]   Create branch from base (default: main)
   git merge -b <name> [-r <path>]    Merge branch to main and delete
 
+Database:
+  db                       Open interactive database CLI
+  db -f <file>             Execute SQL or CSV file
+
 Sync:
   sync -r <path>           Sync using .sync config file
 
@@ -925,6 +929,89 @@ git_merge() {
 }
 
 # ============================================================================
+# Database Operations
+# ============================================================================
+
+# Database CLI - connect or execute files
+db_cli() {
+    load_env
+
+    local FILE="$1"
+    local SQLITE_DB="$WORKSPACE/${DB_DIR:-data}/${PROJECT_NAME}.db"
+
+    # If file is provided
+    if [ -n "$FILE" ]; then
+        [ ! -f "$FILE" ] && error "File not found: $FILE"
+
+        local FILE_EXT="${FILE##*.}"
+
+        # Handle CSV files
+        if [ "$FILE_EXT" = "csv" ]; then
+            local TABLE_NAME=$(basename "$FILE" .csv)
+
+            if [ "$PGSQL_ENABLED" = "y" ]; then
+                info "Loading CSV into PostgreSQL table: $TABLE_NAME"
+                export PGPASSWORD="$PGSQL_ROOT_PASSWORD"
+                psql -h "${PROJECT_NAME}-postgres" -p 5432 -U "$PGSQL_ROOT_USER" -d "$PGSQL_NAME" \
+                    -c "\\COPY $TABLE_NAME FROM '$FILE' WITH (FORMAT CSV, HEADER true, DELIMITER ';')"
+
+            elif [ "$MARIADB_ENABLED" = "y" ]; then
+                info "Loading CSV into MariaDB table: $TABLE_NAME"
+                mysql -h "${PROJECT_NAME}-mariadb" -P 3306 -u "$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_NAME" \
+                    -e "LOAD DATA LOCAL INFILE '$FILE' INTO TABLE $TABLE_NAME FIELDS TERMINATED BY ';' ENCLOSED BY '\"' LINES TERMINATED BY '\\n' IGNORE 1 LINES;"
+
+            else
+                # Default: SQLite
+                info "Loading CSV into SQLite table: $TABLE_NAME"
+                sqlite3 "$SQLITE_DB" <<EOF
+.mode csv
+.separator ";"
+.import --skip 1 $FILE $TABLE_NAME
+EOF
+            fi
+            success "CSV file loaded"
+
+        # Handle SQL files
+        elif [ "$FILE_EXT" = "sql" ]; then
+            info "Executing SQL file: $FILE"
+
+            if [ "$PGSQL_ENABLED" = "y" ]; then
+                export PGPASSWORD="$PGSQL_ROOT_PASSWORD"
+                psql -h "${PROJECT_NAME}-postgres" -p 5432 -U "$PGSQL_ROOT_USER" -d "$PGSQL_NAME" -f "$FILE"
+
+            elif [ "$MARIADB_ENABLED" = "y" ]; then
+                mysql -h "${PROJECT_NAME}-mariadb" -P 3306 -u "$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_NAME" < "$FILE"
+
+            else
+                # Default: SQLite
+                sqlite3 "$SQLITE_DB" < "$FILE"
+            fi
+            success "SQL file executed"
+
+        else
+            error "Unsupported file type. Use .sql or .csv"
+        fi
+
+    # No file - open interactive CLI
+    else
+        if [ "$PGSQL_ENABLED" = "y" ]; then
+            info "Connecting to PostgreSQL..."
+            export PGPASSWORD="$PGSQL_ROOT_PASSWORD"
+            psql -h "${PROJECT_NAME}-postgres" -p 5432 -U "$PGSQL_ROOT_USER" -d "$PGSQL_NAME"
+
+        elif [ "$MARIADB_ENABLED" = "y" ]; then
+            info "Connecting to MariaDB..."
+            mysql -h "${PROJECT_NAME}-mariadb" -P 3306 -u "$MARIADB_USER" -p"$MARIADB_PASSWORD" "$MARIADB_NAME"
+
+        else
+            # Default: SQLite
+            info "Connecting to SQLite: $SQLITE_DB"
+            sqlite3 "$SQLITE_DB"
+        fi
+    fi
+}
+
+# ============================================================================
 # Sync Operations (rsync based on .sync config)
 # ============================================================================
 
@@ -1122,6 +1209,17 @@ case "$1" in
         done
 
         sync_main "$REPO_PATH"
+        ;;
+    db)
+        shift 1
+        if [ $# -eq 0 ]; then
+            db_cli ""
+        elif [ "$1" = "-f" ]; then
+            [ -z "$2" ] && error "Option -f requires a file path"
+            db_cli "$2"
+        else
+            error "Unknown db option: $1. Use: db, db -f <file>"
+        fi
         ;;
     -h|--help|help|"")
         show_help
