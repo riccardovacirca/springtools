@@ -1,5 +1,9 @@
 # TODO
 
+- Aggiungere al comando 'cmd git fetch', l'esecuzione del comando
+  git config --global --add safe.directory /usr/src/app
+  per contrassegnare il repository locale come sicuro
+
 - [x] ~~il file tmp/cmd, proveniente da un diverso contesto applicativo, contiene
   delle procedure relative al database come l'accesso alla cli per sqlite3,
   mariadb e postgres, che dovrebbero essere importate nel comando
