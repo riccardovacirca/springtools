@@ -1,6 +1,6 @@
 <script>
-  import HealthComponent from "./HealthComponent.svelte";
-  import LogsComponent from "./LogsComponent.svelte";
+  import HealthLayout from "./health/HealthLayout.svelte";
+  import LogsLayout from "./logs/LogsLayout.svelte";
 </script>
 
 <div class="status-container">
@@ -9,8 +9,8 @@
     <p>Verifica lo stato dell'applicazione e visualizza i log recenti</p>
   </header>
   <main class="content">
-    <HealthComponent />
-    <LogsComponent />
+    <HealthLayout />
+    <LogsLayout />
   </main>
 </div>
 
