@@ -6,34 +6,28 @@ export const auth = writable({
   token: null
 })
 
-// Check authentication status on load
+// Check authentication status from localStorage
 export async function checkAuth() {
-  try {
-    const response = await fetch('/api/auth/check', {
-      credentials: 'include'
-    })
+  if (typeof localStorage === 'undefined') {
+    auth.set({ isAuthenticated: false, user: null, token: null })
+    return false
+  }
 
-    if (response.ok) {
-      const data = await response.json()
-      
-      if (data.authenticated) {
-        const userResponse = await fetch('/api/auth/me', {
-          credentials: 'include'
-        })
+  const savedToken = localStorage.getItem('auth_token')
+  const savedUser = localStorage.getItem('auth_user')
 
-        if (userResponse.ok) {
-          const user = await userResponse.json()
-          auth.set({ 
-            isAuthenticated: true, 
-            user,
-            token: true  // Cookie-based auth, no explicit token
-          })
-          return true
-        }
-      }
+  if (savedToken && savedUser) {
+    try {
+      const user = JSON.parse(savedUser)
+      auth.set({
+        isAuthenticated: true,
+        user,
+        token: savedToken
+      })
+      return true
+    } catch (error) {
+      console.error('Auth check error:', error)
     }
-  } catch (error) {
-    console.error('Auth check error:', error)
   }
 
   auth.set({ isAuthenticated: false, user: null, token: null })
@@ -42,14 +36,20 @@ export async function checkAuth() {
 
 // Logout function
 export async function logout() {
+  const currentToken = localStorage.getItem('auth_token')
+
   try {
-    await fetch('/api/auth/logout', {
-      method: 'POST',
-      credentials: 'include'
-    })
+    if (currentToken) {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${currentToken}` }
+      })
+    }
   } catch (error) {
     console.error('Logout error:', error)
   }
 
+  localStorage.removeItem('auth_token')
+  localStorage.removeItem('auth_user')
   auth.set({ isAuthenticated: false, user: null, token: null })
 }

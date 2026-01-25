@@ -4,7 +4,7 @@
  * Licensed under Exclusive Free Beta License
  * See LICENSE.md for full terms
  */
-package ${package}.utils;
+package ${package}.util;
 
 import javax.naming.InitialContext;
 import javax.sql.DataSource;

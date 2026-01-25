@@ -1,4 +1,4 @@
-package ${package}.utils;
+package ${package}.util;
 
 import jakarta.servlet.http.HttpServletResponse;
 

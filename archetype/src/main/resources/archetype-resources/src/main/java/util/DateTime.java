@@ -1,4 +1,4 @@
-package ${package}.utils;
+package ${package}.util;
 
 import java.time.DayOfWeek;
 import java.time.Instant;

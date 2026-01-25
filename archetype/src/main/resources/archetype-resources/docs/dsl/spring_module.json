@@ -1,0 +1,457 @@
+{
+  "module_style": "layered_spring_architecture",
+  "description": "DSL per l'organizzazione dei moduli Spring con architettura a layer (Controller-Service-Dao-Dto)",
+
+  "architecture": {
+    "principle": "Separazione delle responsabilità tra layer con flusso unidirezionale Controller -> Service -> Dao",
+    "layers": {
+      "levels": ["controller", "service", "dao", "dto"],
+      "direction": "top-down",
+      "rationale": "Ogni layer ha responsabilità specifiche e comunica solo con il layer adiacente"
+    },
+    "database": {
+      "type": "SQLite3 (default), MariaDB, PostgreSQL",
+      "access": "JDBC tramite libreria interna dev.crm.util.DB",
+      "migration": "Flyway",
+      "rationale": "Accesso diretto JDBC senza ORM per performance e controllo"
+    }
+  },
+
+  "code_formatting": {
+    "indentation": {
+      "size": 2,
+      "unit": "spaces",
+      "rule": "Usare sempre 2 spazi, mai tab"
+    },
+    "braces": {
+      "class_opening": "same line as class declaration",
+      "method_opening": "same line as method signature or throws clause",
+      "rule": "Parentesi graffa di apertura sulla stessa riga della dichiarazione"
+    },
+    "method_parameters": {
+      "first_parameter": "same line as method name",
+      "other_parameters": "one per line, aligned in column with first parameter",
+      "closing_parenthesis": "same line as last parameter",
+      "throws_clause": "aligned in column with last parameter",
+      "examples": {
+        "single_parameter": "public void method(String param) {",
+        "multiple_parameters": "public void method(String first,\n                   String second,\n                   int third) {",
+        "with_throws": "public void method(String first,\n                   String second)\n                   throws Exception {",
+        "with_annotations": "@GetMapping\npublic Map<String, Object> findAll(@RequestParam(defaultValue = \"50\") int limit,\n                                   @RequestParam(defaultValue = \"0\") int offset)\n                                   throws Exception {"
+      }
+    },
+    "spacing": {
+      "after_comma": "one space",
+      "around_operators": "one space on each side",
+      "after_keywords": "one space (if, for, while, catch)"
+    },
+    "function_calls": {
+      "single_argument": "functionName(argument)",
+      "few_arguments": "functionName(arg1, arg2, arg3)",
+      "many_arguments": {
+        "rule": "Opening parenthesis on same line as function name, arguments on following lines indented, closing parenthesis aligned with arguments",
+        "example": "db.query(\n  \"INSERT INTO contatti (\" +\n    \"nome, cognome, telefono\" +\n  \") VALUES (?, ?, ?)\",\n  dto.nome,\n  dto.cognome,\n  dto.telefono\n);",
+        "note": "For SQL queries, string concatenation is indented further to show structure"
+      }
+    }
+  },
+
+  "structure": {
+    "module_location": "src/main/java/dev/crm/module/<module_name>/",
+    "migration_location": "src/main/resources/db/migration/V<timestamp>__module_<module_name>.sql",
+    "required_packages": {
+      "controller": {
+        "path": "controller/",
+        "purpose": "Espone endpoint REST, valida input, delega al service",
+        "pattern": "<Entity>Controller.java"
+      },
+      "service": {
+        "path": "service/",
+        "purpose": "Logica di business, coordina operazioni tra Dao",
+        "pattern": "<Entity>Service.java"
+      },
+      "dao": {
+        "path": "dao/",
+        "purpose": "Accesso ai dati, esegue query SQL tramite libreria DB",
+        "pattern": "<Entity>Dao.java"
+      },
+      "dto": {
+        "path": "dto/",
+        "purpose": "Data Transfer Object, rappresentazione dati tra layer",
+        "pattern": "<Entity>Dto.java"
+      }
+    },
+    "migration": {
+      "naming": "V<YYYYMMDD_HHMMSS>__module_<module_name>.sql",
+      "example": "V20260101_120002__module_contatti.sql",
+      "content": [
+        "CREATE TABLE statements",
+        "CREATE INDEX statements",
+        "Initial data INSERT (optional)"
+      ]
+    }
+  },
+
+  "naming_conventions": {
+    "module": {
+      "case": "snake_case",
+      "examples": ["contatti", "liste", "campagne", "operatori"]
+    },
+    "packages": {
+      "case": "lowercase singular",
+      "fixed_names": ["controller", "service", "dao", "dto"]
+    },
+    "classes": {
+      "controller": {
+        "pattern": "<Entity>Controller",
+        "case": "PascalCase",
+        "example": "ContattoController"
+      },
+      "service": {
+        "pattern": "<Entity>Service",
+        "case": "PascalCase",
+        "example": "ContattoService"
+      },
+      "dao": {
+        "pattern": "<Entity>Dao",
+        "case": "PascalCase",
+        "example": "ContattoDao"
+      },
+      "dto": {
+        "pattern": "<Entity>Dto",
+        "case": "PascalCase",
+        "example": "ContattoDto"
+      }
+    },
+    "database": {
+      "tables": {
+        "case": "snake_case plural",
+        "example": "contatti"
+      },
+      "columns": {
+        "case": "snake_case",
+        "examples": ["nome", "cognome", "ragione_sociale", "created_at"]
+      }
+    }
+  },
+
+  "layer_rules": {
+    "controller": {
+      "annotations": ["@RestController", "@RequestMapping(\"/api/<module>\")"],
+      "responsibility": {
+        "allowed": [
+          "Esporre endpoint REST",
+          "Validare parametri request",
+          "Chiamare metodi service",
+          "Formattare response HTTP",
+          "Gestire ResponseEntity",
+          "Mappare exception a status code"
+        ],
+        "forbidden": [
+          "Logica di business",
+          "Accesso diretto al database",
+          "Chiamate dirette ai Dao",
+          "Manipolazione complessa dei dati"
+        ]
+      },
+      "dependencies": {
+        "required": "Service (via constructor injection)",
+        "forbidden": "Dao diretto"
+      },
+      "standard_endpoints": {
+        "list": {
+          "method": "GET",
+          "path": "/",
+          "params": "limit, offset",
+          "response": "Map with data, total, limit, offset"
+        },
+        "get": {
+          "method": "GET",
+          "path": "/{id}",
+          "response": "ResponseEntity<Dto>"
+        },
+        "search": {
+          "method": "GET",
+          "path": "/search",
+          "params": "q (query string), limit"
+        },
+        "create": {
+          "method": "POST",
+          "path": "/",
+          "body": "Dto"
+        },
+        "update": {
+          "method": "PUT",
+          "path": "/{id}",
+          "body": "Dto"
+        },
+        "delete": {
+          "method": "DELETE",
+          "path": "/{id}",
+          "response": "ResponseEntity.noContent()"
+        }
+      }
+    },
+    "service": {
+      "annotations": ["@Service"],
+      "responsibility": {
+        "required": [
+          "Logica di business",
+          "Coordinazione tra Dao",
+          "Validazione business rules",
+          "Gestione transazioni",
+          "Orchestrazione operazioni complesse"
+        ],
+        "forbidden": [
+          "Accesso diretto JDBC",
+          "Costruzione query SQL",
+          "Gestione connessioni database",
+          "Logica di presentazione/HTTP"
+        ]
+      },
+      "dependencies": {
+        "required": "Dao (via constructor injection)",
+        "optional": "Altri Service per operazioni complesse"
+      },
+      "exception_handling": {
+        "pattern": "throw Exception con messaggio descrittivo",
+        "purpose": "Controller gestisce mapping a HTTP status"
+      }
+    },
+    "dao": {
+      "annotations": ["@Repository"],
+      "responsibility": {
+        "required": [
+          "Eseguire query SQL",
+          "Gestire connessioni JDBC tramite DB utility",
+          "Mappare Record a Dto",
+          "CRUD operations",
+          "Query complesse"
+        ],
+        "forbidden": [
+          "Logica di business",
+          "Validazione business rules",
+          "Coordinazione tra entità diverse"
+        ]
+      },
+      "dependencies": {
+        "required": "javax.sql.DataSource (via constructor injection)",
+        "utility": "dev.crm.util.DB"
+      },
+      "pattern": {
+        "connection": "DB db = new DB(dataSource)",
+        "lifecycle": "try { db.open(); ... } finally { db.close(); }",
+        "insert": "db.query() + db.lastInsertId()",
+        "select": "db.select() returns Recordset",
+        "update_delete": "db.query() returns affected rows",
+        "mapping": "private <Entity>Dto mapRecord(Record r)"
+      },
+      "db_utility_methods": {
+        "conversion": [
+          "DB.toLong(Object)",
+          "DB.toString(Object)",
+          "DB.toInteger(Object)",
+          "DB.toBoolean(Object)",
+          "DB.toLocalDateTime(Object)",
+          "DB.toSqlTimestamp(LocalDateTime)"
+        ],
+        "query": [
+          "db.query(sql, params...)",
+          "db.select(sql, params...)",
+          "db.lastInsertId()"
+        ]
+      }
+    },
+    "dto": {
+      "annotations": "None (POJO)",
+      "responsibility": {
+        "required": [
+          "Rappresentare dati trasferiti tra layer",
+          "Campi pubblici per semplicità",
+          "Costruttore vuoto e costruttore con parametri",
+          "Metodi utility opzionali (es. getDisplayName)"
+        ],
+        "forbidden": [
+          "Logica di business",
+          "Dipendenze da altri layer",
+          "Annotazioni JPA/Hibernate",
+          "Getter/Setter (usare campi pubblici)"
+        ]
+      },
+      "field_conventions": {
+        "primary_key": "Long id",
+        "timestamps": "LocalDateTime createdAt, updatedAt",
+        "visibility": "public",
+        "naming": "camelCase"
+      }
+    }
+  },
+
+  "migration_rules": {
+    "naming_convention": {
+      "pattern": "V<YYYYMMDD_HHMMSS>__module_<module_name>.sql",
+      "timestamp_format": "YYYYMMDD_HHMMSS",
+      "separator": "double underscore",
+      "description": "module_<name>"
+    },
+    "content_structure": {
+      "order": [
+        "CREATE TABLE statements",
+        "CREATE INDEX statements",
+        "Initial data (optional)"
+      ]
+    },
+    "table_conventions": {
+      "primary_key": "id INTEGER PRIMARY KEY AUTOINCREMENT",
+      "timestamps": "created_at TIMESTAMP NOT NULL, updated_at TIMESTAMP",
+      "required_fields": ["id", "created_at"],
+      "optional_fields": ["updated_at"]
+    },
+    "index_conventions": {
+      "naming": "idx_<table>_<column>",
+      "common_indexes": [
+        "Foreign keys",
+        "Search fields",
+        "Status/state fields",
+        "Timestamp fields for sorting"
+      ]
+    }
+  },
+
+  "dependency_injection": {
+    "pattern": "Constructor injection",
+    "example": "public ContattoController(ContattoService service) { this.service = service; }",
+    "rationale": "Immutability, testability, esplicita dipendenza"
+  },
+
+  "error_handling": {
+    "dao_layer": "throw Exception con messaggio tecnico",
+    "service_layer": "throw Exception con messaggio business",
+    "controller_layer": "catch e mappa a ResponseEntity con status appropriato"
+  },
+
+  "directory_structure": {
+    "simple_module": {
+      "description": "Modulo con singola entità",
+      "example": {
+        "module": "contatti",
+        "structure": [
+          "src/main/java/dev/crm/module/contatti/",
+          "├── controller/",
+          "│   └── ContattoController.java",
+          "├── service/",
+          "│   └── ContattoService.java",
+          "├── dao/",
+          "│   └── ContattoDao.java",
+          "└── dto/",
+          "    └── ContattoDto.java",
+          "",
+          "src/main/resources/db/migration/",
+          "└── V20260101_120002__module_contatti.sql"
+        ]
+      }
+    },
+    "complex_module": {
+      "description": "Modulo con multiple entità correlate",
+      "example": {
+        "module": "agende",
+        "structure": [
+          "src/main/java/dev/crm/module/agende/",
+          "├── controller/",
+          "│   ├── PromemoriaController.java",
+          "│   ├── RichiamoController.java",
+          "│   └── StoricoRichiamoController.java",
+          "├── service/",
+          "│   ├── PromemoriaService.java",
+          "│   ├── RichiamoService.java",
+          "│   └── StoricoRichiamoService.java",
+          "├── dao/",
+          "│   ├── PromemoriaDao.java",
+          "│   ├── RichiamoDao.java",
+          "│   └── StoricoRichiamoDao.java",
+          "└── dto/",
+          "    ├── PromemoriaDto.java",
+          "    ├── RichiamoDto.java",
+          "    └── StoricoRichiamoDto.java",
+          "",
+          "src/main/resources/db/migration/",
+          "└── V20260101_120006__module_agende.sql"
+        ]
+      }
+    }
+  },
+
+  "data_flow": {
+    "request_flow": "HTTP Request -> Controller -> Service -> Dao -> Database",
+    "response_flow": "Database -> Record -> Dto (via mapRecord) -> Service -> Controller -> HTTP Response",
+    "pattern": "Unidirezionale top-down, ogni layer comunica solo con il successivo"
+  },
+
+  "anti_patterns": {
+    "forbidden": [
+      {
+        "pattern": "controller_to_dao",
+        "example": "Controller che chiama direttamente Dao",
+        "reason": "Bypassa logica business del Service"
+      },
+      {
+        "pattern": "business_logic_in_controller",
+        "example": "Validazioni complesse o manipolazioni dati nel Controller",
+        "reason": "Controller deve solo gestire HTTP, non business logic"
+      },
+      {
+        "pattern": "sql_in_service",
+        "example": "Service che costruisce query SQL",
+        "reason": "SQL compete al Dao"
+      },
+      {
+        "pattern": "dto_with_logic",
+        "example": "Dto con metodi che eseguono business logic",
+        "reason": "Dto deve essere un semplice contenitore dati"
+      },
+      {
+        "pattern": "connection_leak",
+        "example": "db.open() senza db.close() in finally",
+        "reason": "Causa esaurimento connessioni"
+      },
+      {
+        "pattern": "field_injection",
+        "example": "@Autowired private Service service;",
+        "reason": "Preferire constructor injection per immutability"
+      },
+      {
+        "pattern": "generic_exceptions",
+        "example": "catch (Exception e) senza re-throw o logging",
+        "reason": "Nasconde errori, rende debugging difficile"
+      },
+      {
+        "pattern": "hardcoded_values",
+        "example": "Valori magici nel codice invece che costanti",
+        "reason": "Difficile manutenzione e testing"
+      }
+    ]
+  },
+
+  "examples": {
+    "controller": {
+      "file": "src/main/java/dev/crm/module/contatti/controller/ContattoController.java",
+      "code": "@RestController\n@RequestMapping(\"/api/contatti\")\npublic class ContattoController {\n  private final ContattoService service;\n\n  public ContattoController(ContattoService service) {\n    this.service = service;\n  }\n\n  @GetMapping\n  public Map<String, Object> findAll(@RequestParam(defaultValue = \"50\") int limit,\n                                     @RequestParam(defaultValue = \"0\") int offset)\n                                     throws Exception {\n    Map<String, Object> result = new HashMap<>();\n    result.put(\"data\", service.findAll(limit, offset));\n    result.put(\"total\", service.count());\n    result.put(\"limit\", limit);\n    result.put(\"offset\", offset);\n    return result;\n  }\n\n  @GetMapping(\"/{id}\")\n  public ResponseEntity<ContattoDto> findById(@PathVariable Long id)\n                                              throws Exception {\n    return service.findById(id)\n      .map(ResponseEntity::ok)\n      .orElse(ResponseEntity.notFound().build());\n  }\n\n  @PostMapping\n  public ContattoDto create(@RequestBody ContattoDto dto)\n                            throws Exception {\n    return service.create(dto);\n  }\n\n  @PutMapping(\"/{id}\")\n  public ContattoDto update(@PathVariable Long id,\n                            @RequestBody ContattoDto dto)\n                            throws Exception {\n    dto.id = id;\n    return service.update(dto);\n  }\n\n  @DeleteMapping(\"/{id}\")\n  public ResponseEntity<Void> delete(@PathVariable Long id)\n                                     throws Exception {\n    service.delete(id);\n    return ResponseEntity.noContent().build();\n  }\n}"
+    },
+    "service": {
+      "file": "src/main/java/dev/crm/module/contatti/service/ContattoService.java",
+      "code": "@Service\npublic class ContattoService {\n  private final ContattoDao dao;\n\n  public ContattoService(ContattoDao dao) {\n    this.dao = dao;\n  }\n\n  public ContattoDto create(ContattoDto dto)\n                            throws Exception {\n    long id = dao.insert(dto);\n    return dao.findById(id)\n      .orElseThrow(() -> new Exception(\"Contatto non trovato dopo creazione\"));\n  }\n\n  public ContattoDto update(ContattoDto dto)\n                            throws Exception {\n    dao.update(dto);\n    return dao.findById(dto.id)\n      .orElseThrow(() -> new Exception(\"Contatto non trovato\"));\n  }\n\n  public void delete(Long id)\n                     throws Exception {\n    dao.delete(id);\n  }\n\n  public Optional<ContattoDto> findById(Long id)\n                                        throws Exception {\n    return dao.findById(id);\n  }\n\n  public List<ContattoDto> findAll(int limit,\n                                   int offset)\n                                   throws Exception {\n    return dao.findAll(limit, offset);\n  }\n\n  public int count()\n                   throws Exception {\n    return dao.count();\n  }\n}"
+    },
+    "dao": {
+      "file": "src/main/java/dev/crm/module/contatti/dao/ContattoDao.java",
+      "code": "@Repository\npublic class ContattoDao {\n  private final DataSource dataSource;\n\n  public ContattoDao(DataSource dataSource) {\n    this.dataSource = dataSource;\n  }\n\n  public long insert(ContattoDto dto)\n                     throws Exception {\n    DB db = new DB(dataSource);\n    try {\n      db.open();\n      db.query(\n        \"INSERT INTO contatti (\" +\n          \"nome, cognome, telefono, created_at\" +\n        \") VALUES (?, ?, ?, ?)\",\n        dto.nome,\n        dto.cognome,\n        dto.telefono,\n        DB.toSqlTimestamp(LocalDateTime.now())\n      );\n      return db.lastInsertId();\n    } finally {\n      db.close();\n    }\n  }\n\n  public Optional<ContattoDto> findById(Long id)\n                                        throws Exception {\n    DB db = new DB(dataSource);\n    try {\n      db.open();\n      Recordset rs = db.select(\"SELECT * FROM contatti WHERE id = ?\", id);\n      if (rs.isEmpty()) {\n        return Optional.empty();\n      }\n      return Optional.of(mapRecord(rs.get(0)));\n    } finally {\n      db.close();\n    }\n  }\n\n  public List<ContattoDto> findAll(int limit,\n                                   int offset)\n                                   throws Exception {\n    DB db = new DB(dataSource);\n    List<ContattoDto> result = new ArrayList<>();\n    try {\n      db.open();\n      Recordset rs = db.select(\n        \"SELECT * FROM contatti ORDER BY id DESC LIMIT ? OFFSET ?\",\n        limit,\n        offset\n      );\n      for (Record r : rs) {\n        result.add(mapRecord(r));\n      }\n      return result;\n    } finally {\n      db.close();\n    }\n  }\n\n  private ContattoDto mapRecord(Record r) {\n    return new ContattoDto(\n      DB.toLong(r.get(\"id\")),\n      DB.toString(r.get(\"nome\")),\n      DB.toString(r.get(\"cognome\")),\n      DB.toString(r.get(\"telefono\")),\n      DB.toLocalDateTime(r.get(\"created_at\")),\n      DB.toLocalDateTime(r.get(\"updated_at\"))\n    );\n  }\n}"
+    },
+    "dto": {
+      "file": "src/main/java/dev/crm/module/contatti/dto/ContattoDto.java",
+      "code": "public class ContattoDto {\n  public Long id;\n  public String nome;\n  public String cognome;\n  public String telefono;\n  public LocalDateTime createdAt;\n  public LocalDateTime updatedAt;\n\n  public ContattoDto() {}\n\n  public ContattoDto(Long id,\n                     String nome,\n                     String cognome,\n                     String telefono,\n                     LocalDateTime createdAt,\n                     LocalDateTime updatedAt) {\n    this.id = id;\n    this.nome = nome;\n    this.cognome = cognome;\n    this.telefono = telefono;\n    this.createdAt = createdAt;\n    this.updatedAt = updatedAt;\n  }\n}"
+    },
+    "migration": {
+      "file": "src/main/resources/db/migration/V20260101_120002__module_contatti.sql",
+      "code": "-- Tabella contatti\nCREATE TABLE IF NOT EXISTS contatti (\n    id INTEGER PRIMARY KEY AUTOINCREMENT,\n    nome VARCHAR(100),\n    cognome VARCHAR(100),\n    telefono VARCHAR(20),\n    created_at TIMESTAMP NOT NULL,\n    updated_at TIMESTAMP\n);\n\n-- Indici\nCREATE INDEX IF NOT EXISTS idx_contatti_telefono ON contatti(telefono);\nCREATE INDEX IF NOT EXISTS idx_contatti_cognome ON contatti(cognome);"
+    }
+  }
+}

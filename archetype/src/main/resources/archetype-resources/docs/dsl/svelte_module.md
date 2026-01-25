@@ -19,7 +19,7 @@ IMPORT STYLE:
 
 ```
 module/<module_name>/
-├── Layout.svelte                    # Entry point (importato da src/Layout.svelte)
+├── Layout.svelte                    # Entry point (importato da src/Application.svelte)
 ├── <EntityName>Layout.svelte        # Entity layout (1 per entità)
 ├── store.js                         # Store unico centralizzato
 ├── <entity_name>/                   # Cartella entità (snake_case)
@@ -372,7 +372,7 @@ module/risorse/
 # IMPORT CHAIN
 
 ```
-src/Layout.svelte
+src/Application.svelte
   └── import Layout from './module/risorse/Layout.svelte'
         └── import ContattiLayout from './ContattiLayout.svelte'
               └── import ListaComponent from './contatti/ListaComponent.svelte'

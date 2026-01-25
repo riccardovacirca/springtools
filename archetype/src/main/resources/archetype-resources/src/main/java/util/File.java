@@ -1,4 +1,4 @@
-package ${package}.utils;
+package ${package}.util;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

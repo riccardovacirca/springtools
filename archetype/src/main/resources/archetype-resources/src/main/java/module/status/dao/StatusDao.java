@@ -1,8 +1,8 @@
 package ${package}.module.status.dao;
 
-import ${package}.utils.DB;
-import ${package}.utils.DB.Record;
-import ${package}.utils.DB.Recordset;
+import ${package}.util.DB;
+import ${package}.util.DB.Record;
+import ${package}.util.DB.Recordset;
 import ${package}.module.status.dto.StatusLogDto;
 import org.springframework.stereotype.Repository;
 

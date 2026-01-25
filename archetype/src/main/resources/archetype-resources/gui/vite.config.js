@@ -4,13 +4,13 @@ import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [svelte()],
-  root: 'src',
+  root: '.',
   base: './',
   build: {
-    outDir: '../../src/main/resources/static',
+    outDir: '../src/main/resources/static',
     emptyOutDir: true,
     rollupOptions: {
-      input: resolve(__dirname, 'src/index.html'),
+      input: resolve(__dirname, 'index.html'),
       output: {
         assetFileNames: 'assets/[name]-[hash][extname]',
         chunkFileNames: 'assets/[name]-[hash].js',
