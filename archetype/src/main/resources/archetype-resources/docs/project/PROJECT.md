@@ -31,6 +31,19 @@ Percorso: /usr/src/app/src/main/java/dev/crm/utils
 La libreria interna contiene utility per la maggior parte delle operazioni.
 Se una funzionalità manca, deve essere aggiunta alla libreria.
 
+#### Utility Disponibili
+
+* **DB** - Astrazione database con supporto JDBC
+* **Excel** - Importazione e parsing file Excel/CSV
+  * ExcelReader - Lettura file Excel
+  * ExcelImporter - Import con mapping e normalizzazione
+  * Strategie di normalizzazione personalizzabili
+* **DateTime** - Gestione date e timestamp
+* **HttpRequest/HttpResponse** - Client HTTP
+* **JSON** - Manipolazione JSON
+* **File** - Operazioni su file
+* **Env** - Gestione variabili d'ambiente
+
 ## Struttura dei Moduli
 
 Un modulo completo si compone di tre parti:
