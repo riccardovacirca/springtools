@@ -1,6 +1,50 @@
 <script>
+  import { onMount, onDestroy } from 'svelte';
+  import { setContextSidebar, clearContextSidebar } from '../sidebar/store.js';
+  import { setContextHeader, clearContextHeader } from '../header/store.js';
+  import StatusSidebarLayout from './sidebar/Layout.svelte';
+  import StatusHeaderLayout from './header/Layout.svelte';
   import HealthLayout from "./health/HealthLayout.svelte";
   import LogsLayout from "./logs/LogsLayout.svelte";
+
+  let currentView = $state('health');
+
+  function handleViewChange(view) {
+    currentView = view;
+  }
+
+  onMount(() => {
+    // Registra sidebar
+    setContextSidebar(StatusSidebarLayout, {
+      currentView,
+      onViewChange: handleViewChange
+    });
+
+    // Registra header
+    setContextHeader(StatusHeaderLayout, {
+      currentView,
+      onViewChange: handleViewChange
+    });
+  });
+
+  $effect(() => {
+    // Aggiorna props sidebar
+    setContextSidebar(StatusSidebarLayout, {
+      currentView,
+      onViewChange: handleViewChange
+    });
+
+    // Aggiorna props header
+    setContextHeader(StatusHeaderLayout, {
+      currentView,
+      onViewChange: handleViewChange
+    });
+  });
+
+  onDestroy(() => {
+    clearContextSidebar();
+    clearContextHeader();
+  });
 </script>
 
 <div class="status-container">
@@ -9,8 +53,11 @@
     <p>Verifica lo stato dell'applicazione e visualizza i log recenti</p>
   </header>
   <main class="content">
-    <HealthLayout />
-    <LogsLayout />
+    {#if currentView === 'health'}
+      <HealthLayout />
+    {:else if currentView === 'logs'}
+      <LogsLayout />
+    {/if}
   </main>
 </div>
 
