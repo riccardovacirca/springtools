@@ -4,6 +4,34 @@
   git config --global --add safe.directory /usr/src/app
   per contrassegnare il repository locale come sicuro
 
+- Reimplementare la classe JSON della libreria util il modo spring idiomatico
+  e correggere le eventuali chiamate esistenti:
+  package dev.crm.util;
+  import com.fasterxml.jackson.databind.ObjectMapper;
+  import org.springframework.stereotype.Component;
+  import java.nio.charset.StandardCharsets;
+  import java.nio.file.Files;
+  import java.nio.file.Paths;
+  @Component
+  public class JSON {
+    private final ObjectMapper mapper;
+    public JSON(ObjectMapper mapper) {
+      this.mapper = mapper;
+    }
+    public String encode(Object obj) throws Exception {
+      return mapper.writeValueAsString(obj);
+    }
+    public <T> T decode(String json, Class<T> cls) throws Exception {
+      return mapper.readValue(json, cls);
+    }
+    public String load(String filename) throws Exception {
+      return new String(Files.readAllBytes(Paths.get(filename)), StandardCharsets.UTF_8);
+    }
+    public <T> T load(String filename, Class<T> cls) throws Exception {
+      return decode(load(filename), cls);
+    }
+  }
+
 - [x] ~~il file tmp/cmd, proveniente da un diverso contesto applicativo, contiene
   delle procedure relative al database come l'accesso alla cli per sqlite3,
   mariadb e postgres, che dovrebbero essere importate nel comando
