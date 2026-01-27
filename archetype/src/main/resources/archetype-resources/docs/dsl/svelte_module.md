@@ -20,6 +20,10 @@ IMPORT STYLE:
 ```
 module/<module_name>/
 ├── Layout.svelte                    # Entry point (importato da src/Application.svelte)
+├── sidebar/                         # OPZIONALE: UI sidebar contestuale
+│   └── Layout.svelte                # Componente sidebar del modulo
+├── header/                          # OPZIONALE: UI header dropdown contestuale
+│   └── Layout.svelte                # Componente header del modulo
 ├── <EntityName>Layout.svelte        # Entity layout (1 per entità)
 ├── store.js                         # Store unico centralizzato
 ├── <entity_name>/                   # Cartella entità (snake_case)
@@ -32,6 +36,13 @@ module/<module_name>/
 │   └── <subentity_name>/            # Cartella sub-entità
 │       └── <ComponentName>Component.svelte
 ```
+
+CONTEXTUAL UI (sidebar/header):
+  - Pattern: Component-based registration
+  - Location: module/<name>/sidebar/ e module/<name>/header/
+  - Purpose: Registrazione UI contestuale nella sidebar/header globale
+  - Docs: Vedi docs/architecture/sidebar_context_pattern.md e header_dropdown_pattern.md
+  - Note: Opzionali, usare solo se il modulo richiede navigazione contestuale
 
 # NAMING CONVENTIONS
 
@@ -89,6 +100,85 @@ PROP PASSING:
   - Pattern: export let propName
   - Direction: top-down (layout -> component)
   - Example: <ContattiLayout {currentView} />
+
+# CONTEXTUAL UI PATTERNS
+
+SIDEBAR PATTERN:
+  - Purpose: Registrare menu contestuale nella sidebar globale
+  - File: module/<name>/sidebar/Layout.svelte
+  - Props richieste:
+    - currentView: stato attuale navigazione
+    - onViewChange: callback per cambio vista
+  - Registrazione: onMount(() => setContextSidebar(SidebarLayout, props))
+  - Aggiornamento: $effect(() => setContextSidebar(SidebarLayout, props))
+  - Cleanup: onDestroy(() => clearContextSidebar())
+  - Docs: docs/architecture/sidebar_context_pattern.md
+
+HEADER PATTERN:
+  - Purpose: Registrare dropdown contestuale nell'header globale
+  - File: module/<name>/header/Layout.svelte
+  - Props richieste:
+    - currentView: stato attuale navigazione
+    - onViewChange: callback per cambio vista
+    - isDropdown: boolean per doppia modalità rendering
+    - onClose: callback per chiudere dropdown
+  - Doppia modalità:
+    - isDropdown=false: mostra solo titolo (nel trigger)
+    - isDropdown=true: mostra voci menu (nel dropdown)
+  - Registrazione: onMount(() => setContextHeader(HeaderLayout, props))
+  - Aggiornamento: $effect(() => setContextHeader(HeaderLayout, props))
+  - Cleanup: onDestroy(() => clearContextHeader())
+  - Docs: docs/architecture/header_dropdown_pattern.md
+
+QUANDO USARE:
+  - Moduli con multiple viste/sezioni (es. Status: Health, Logs)
+  - Moduli con navigazione interna complessa
+  - Moduli che richiedono accesso rapido da qualsiasi punto dell'app
+  - NON usare per moduli con singola vista semplice
+
+ESEMPIO REGISTRAZIONE:
+```svelte
+<script>
+  import { onMount, onDestroy } from 'svelte';
+  import { setContextSidebar, clearContextSidebar } from '../sidebar/store.js';
+  import { setContextHeader, clearContextHeader } from '../header/store.js';
+  import StatusSidebarLayout from './sidebar/Layout.svelte';
+  import StatusHeaderLayout from './header/Layout.svelte';
+
+  let currentView = $state('health');
+
+  function handleViewChange(view) {
+    currentView = view;
+  }
+
+  onMount(() => {
+    setContextSidebar(StatusSidebarLayout, {
+      currentView,
+      onViewChange: handleViewChange
+    });
+    setContextHeader(StatusHeaderLayout, {
+      currentView,
+      onViewChange: handleViewChange
+    });
+  });
+
+  $effect(() => {
+    setContextSidebar(StatusSidebarLayout, {
+      currentView,
+      onViewChange: handleViewChange
+    });
+    setContextHeader(StatusHeaderLayout, {
+      currentView,
+      onViewChange: handleViewChange
+    });
+  });
+
+  onDestroy(() => {
+    clearContextSidebar();
+    clearContextHeader();
+  });
+</script>
+```
 
 # COMPONENT RULES
 
@@ -368,6 +458,169 @@ module/risorse/
         ├── StoriaComponent.svelte
         └── AzioniComponent.svelte
 ```
+
+# MODULE WITH CONTEXTUAL UI EXAMPLE
+
+```
+module/status/
+├── Layout.svelte                    # Entry point con registrazione sidebar/header
+├── sidebar/
+│   └── Layout.svelte                # Menu sidebar con Health/Logs
+├── header/
+│   └── Layout.svelte                # Dropdown header con Health/Logs
+├── store.js
+├── health/
+│   ├── HealthLayout.svelte
+│   └── HealthComponent.svelte
+└── logs/
+    ├── LogsLayout.svelte
+    └── LogsComponent.svelte
+```
+
+Layout.svelte:
+```svelte
+<script>
+  import { onMount, onDestroy } from 'svelte';
+  import { setContextSidebar, clearContextSidebar } from '../sidebar/store.js';
+  import { setContextHeader, clearContextHeader } from '../header/store.js';
+  import StatusSidebarLayout from './sidebar/Layout.svelte';
+  import StatusHeaderLayout from './header/Layout.svelte';
+  import HealthLayout from "./health/HealthLayout.svelte";
+  import LogsLayout from "./logs/LogsLayout.svelte";
+
+  let currentView = $state('health');
+
+  function handleViewChange(view) {
+    currentView = view;
+  }
+
+  onMount(() => {
+    setContextSidebar(StatusSidebarLayout, {
+      currentView,
+      onViewChange: handleViewChange
+    });
+    setContextHeader(StatusHeaderLayout, {
+      currentView,
+      onViewChange: handleViewChange
+    });
+  });
+
+  $effect(() => {
+    setContextSidebar(StatusSidebarLayout, {
+      currentView,
+      onViewChange: handleViewChange
+    });
+    setContextHeader(StatusHeaderLayout, {
+      currentView,
+      onViewChange: handleViewChange
+    });
+  });
+
+  onDestroy(() => {
+    clearContextSidebar();
+    clearContextHeader();
+  });
+</script>
+
+<div class="status-container">
+  {#if currentView === 'health'}
+    <HealthLayout />
+  {:else if currentView === 'logs'}
+    <LogsLayout />
+  {/if}
+</div>
+```
+
+sidebar/Layout.svelte:
+```svelte
+<script>
+  export let currentView = 'health';
+  export let onViewChange = () => {};
+</script>
+
+<div class="status-sidebar">
+  <div class="sidebar-title">Status</div>
+  <nav class="sidebar-nav">
+    <button
+      class:active={currentView === 'health'}
+      onclick={() => onViewChange('health')}
+    >
+      Health
+    </button>
+    <button
+      class:active={currentView === 'logs'}
+      onclick={() => onViewChange('logs')}
+    >
+      Logs
+    </button>
+  </nav>
+</div>
+```
+
+header/Layout.svelte:
+```svelte
+<script>
+  export let currentView = 'health';
+  export let onViewChange = () => {};
+  export let isDropdown = false;
+  export let onClose = () => {};
+
+  function handleItemClick(view) {
+    onViewChange(view);
+    onClose();
+  }
+</script>
+
+{#if isDropdown}
+  <!-- Modalità dropdown: mostra voci -->
+  <div class="status-header-dropdown">
+    <button
+      class:active={currentView === 'health'}
+      onclick={() => handleItemClick('health')}
+    >
+      Health Check
+    </button>
+    <button
+      class:active={currentView === 'logs'}
+      onclick={() => handleItemClick('logs')}
+    >
+      System Logs
+    </button>
+  </div>
+{:else}
+  <!-- Modalità trigger: mostra solo titolo -->
+  <span>Status</span>
+{/if}
+```
+
+# CHECKLIST: MODULO CON SIDEBAR E HEADER
+
+Layout Principale:
+- [ ] Import setContextSidebar, clearContextSidebar da '../sidebar/store.js'
+- [ ] Import setContextHeader, clearContextHeader da '../header/store.js'
+- [ ] Import componenti sidebar/Layout.svelte e header/Layout.svelte
+- [ ] Definire stato navigazione (let currentView = $state('default'))
+- [ ] Definire handler cambio vista (function handleViewChange(view))
+- [ ] Registrare sidebar e header in onMount()
+- [ ] Aggiornare props in $effect()
+- [ ] Cleanup in onDestroy()
+- [ ] Routing condizionale basato su currentView
+
+Sidebar Layout (sidebar/Layout.svelte):
+- [ ] Definire props: export let currentView, export let onViewChange
+- [ ] Implementare UI navigazione con pulsanti
+- [ ] Applicare classe .active basata su currentView
+- [ ] Chiamare onViewChange al click
+- [ ] Stili: padding, colori, hover, active state
+
+Header Layout (header/Layout.svelte):
+- [ ] Definire props: currentView, onViewChange, isDropdown, onClose
+- [ ] Implementare doppia modalità con {#if isDropdown}
+- [ ] Modalità trigger (isDropdown=false): solo titolo
+- [ ] Modalità dropdown (isDropdown=true): voci menu
+- [ ] Funzione handleItemClick che chiama onViewChange + onClose
+- [ ] Stili: dropdown layout, item hover, active state
+- [ ] Opzionale: icone SVG per migliorare UX
 
 # IMPORT CHAIN
 
