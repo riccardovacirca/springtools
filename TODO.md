@@ -32,6 +32,181 @@
     }
   }
 
+- Reimplementare la classe db in modo spring idiomatico:
+  package dev.crm.util;
+  import org.springframework.context.annotation.Bean;
+  import org.springframework.context.annotation.Configuration;
+  import org.springframework.jdbc.core.JdbcTemplate;
+  import org.springframework.jdbc.support.GeneratedKeyHolder;
+  import org.springframework.jdbc.support.KeyHolder;
+  import org.springframework.transaction.PlatformTransactionManager;
+  import org.springframework.transaction.TransactionStatus;
+  import org.springframework.transaction.support.DefaultTransactionDefinition;
+  import java.sql.PreparedStatement;
+  import java.sql.ResultSetMetaData;
+  import java.sql.SQLException;
+  import java.util.*;
+  /**
+  * Java database abstraction layer using Spring JdbcTemplate
+  * with transaction support.
+  */
+  public class DB {
+    private final JdbcTemplate jdbcTemplate;
+    private final PlatformTransactionManager transactionManager;
+    private TransactionStatus currentTransaction;
+    private Long lastGeneratedKey = null;
+    public DB(JdbcTemplate jdbcTemplate, PlatformTransactionManager transactionManager) {
+      this.jdbcTemplate = jdbcTemplate;
+      this.transactionManager = transactionManager;
+    }
+    // ========================================
+    // TRANSAZIONI
+    // ========================================
+    public void begin() {
+      if (currentTransaction != null) {
+        throw new IllegalStateException("Transaction already active");
+      }
+      currentTransaction = transactionManager.getTransaction(new DefaultTransactionDefinition());
+    }
+    public void commit() {
+      if (currentTransaction == null) {
+        throw new IllegalStateException("No active transaction");
+      }
+      transactionManager.commit(currentTransaction);
+      currentTransaction = null;
+    }
+    public void rollback() {
+      if (currentTransaction == null) {
+        throw new IllegalStateException("No active transaction");
+      }
+      transactionManager.rollback(currentTransaction);
+      currentTransaction = null;
+    }
+    // ========================================
+    // QUERY DML (INSERT/UPDATE/DELETE)
+    // ========================================
+    public int query(String sql, Object... params) {
+      KeyHolder keyHolder = new GeneratedKeyHolder();
+      int rows = jdbcTemplate.update(connection -> {
+        PreparedStatement ps = connection.prepareStatement(sql, PreparedStatement.RETURN_GENERATED_KEYS);
+        for (int i = 0; i < params.length; i++) {
+          ps.setObject(i + 1, params[i]);
+        }
+        return ps;
+      }, keyHolder);
+      lastGeneratedKey = (keyHolder.getKey() != null) ? keyHolder.getKey().longValue() : null;
+      return rows;
+    }
+    // ========================================
+    // SELECT
+    // ========================================
+    public Recordset select(String sql, Object... params) {
+      return new Recordset(jdbcTemplate.query(sql, params, (rs, rowNum) -> {
+        Record record = new Record();
+        ResultSetMetaData meta = rs.getMetaData();
+        int colCount = meta.getColumnCount();
+        for (int i = 1; i <= colCount; i++) {
+          record.put(meta.getColumnName(i), rs.getObject(i));
+        }
+        return record;
+      }));
+    }
+    // ========================================
+    // RESTITUISCE L'ULTIMA CHIAVE GENERATA
+    // ========================================
+    public Long lastInsertId() {
+      return lastGeneratedKey;
+    }
+    // ========================================
+    // CURSOR PER ITERAZIONE MEMORY-EFFICIENT
+    // ========================================
+    public Cursor cursor(String sql, Object... params) {
+      return new Cursor(jdbcTemplate.getDataSource(), sql, params);
+    }
+    // ========================================
+    // OTTIENE LE COLONNE DI UNA TABELLA
+    // ========================================
+    public Set<String> getTableColumns(String tableName) {
+      return new HashSet<>(jdbcTemplate.query(
+        "SELECT * FROM " + tableName + " WHERE 1=0",
+        rs -> {
+          ResultSetMetaData meta = rs.getMetaData();
+          Set<String> columns = new HashSet<>();
+          for (int i = 1; i <= meta.getColumnCount(); i++) {
+            columns.add(meta.getColumnName(i).toLowerCase());
+          }
+          return columns;
+        }
+      ));
+    }
+    // ========================================
+    // RECORD / RECORDSET
+    // ========================================
+    public static class Record extends HashMap<String, Object> { }
+    public static class Recordset extends ArrayList<Record> {
+      public Recordset(Collection<Record> records) {
+        super(records);
+      }
+    }
+    // ========================================
+    // CURSOR
+    // ========================================
+    public static class Cursor implements AutoCloseable {
+      private final java.sql.Connection connection;
+      private final java.sql.PreparedStatement statement;
+      private final java.sql.ResultSet resultSet;
+      Cursor(javax.sql.DataSource dataSource, String sql, Object... params) {
+        try {
+          connection = dataSource.getConnection();
+          statement = connection.prepareStatement(sql);
+          for (int i = 0; i < params.length; i++) {
+            statement.setObject(i + 1, params[i]);
+          }
+          resultSet = statement.executeQuery();
+        } catch (SQLException e) {
+          throw new RuntimeException(e);
+        }
+      }
+      public boolean next() throws SQLException {
+        return resultSet.next();
+      }
+      public Object get(String column) throws SQLException {
+        return resultSet.getObject(column);
+      }
+      public Record getRow() throws SQLException {
+        Record record = new Record();
+        ResultSetMetaData meta = resultSet.getMetaData();
+        for (int i = 1; i <= meta.getColumnCount(); i++) {
+          record.put(meta.getColumnName(i), resultSet.getObject(i));
+        }
+        return record;
+      }
+      @Override
+      public void close() {
+        try {
+          if (resultSet != null) resultSet.close();
+        } catch (SQLException ignored) {}
+        try {
+          if (statement != null) statement.close();
+        } catch (SQLException ignored) {}
+        try {
+          if (connection != null) connection.close();
+        } catch (SQLException ignored) {}
+      }
+    }
+    // ========================================
+    // CONFIGURAZIONE SPRING
+    // ========================================
+    @Configuration
+    public static class Config {
+      @Bean
+      public DB db(JdbcTemplate jdbcTemplate, PlatformTransactionManager txManager) {
+        return new DB(jdbcTemplate, txManager);
+      }
+    }
+  }
+
+
 - [x] ~~il file tmp/cmd, proveniente da un diverso contesto applicativo, contiene
   delle procedure relative al database come l'accesso alla cli per sqlite3,
   mariadb e postgres, che dovrebbero essere importate nel comando
