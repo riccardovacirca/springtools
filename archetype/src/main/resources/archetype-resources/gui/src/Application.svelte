@@ -1,4 +1,5 @@
 <script>
+  import '@coreui/coreui/dist/css/coreui.min.css'
   import { onMount } from 'svelte'
   import { auth, checkAuth } from './store.js'
   import SidebarLayout from './module/sidebar/Layout.svelte'
