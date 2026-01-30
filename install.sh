@@ -62,7 +62,6 @@ MARIADB_ROOT_PASSWORD=root
 MARIADB_NAME=appdb
 MARIADB_USER=appuser
 MARIADB_PASSWORD=apppass
-MARIADB_JDBC_URL=jdbc:mariadb://PROJECT_DIR_PLACEHOLDER-mariadb:3306/appdb
 
 # PostgreSQL
 PGSQL_ENABLED=n
@@ -73,7 +72,16 @@ PGSQL_ROOT_PASSWORD=postgres
 PGSQL_NAME=appdb
 PGSQL_USER=appuser
 PGSQL_PASSWORD=apppass
-PGSQL_JDBC_URL=jdbc:postgresql://PROJECT_DIR_PLACEHOLDER-postgres:5432/appdb
+
+# Asterisk (Telephony)
+ASTERISK_ENABLED=n
+ASTERISK_IMAGE=andrius/asterisk:20
+ASTERISK_PORT_HTTP=2380
+ASTERISK_PORT_SIP=5060
+ASTERISK_PORT_RTP_START=10000
+ASTERISK_PORT_RTP_END=10099
+ASTERISK_ARI_USER=ariuser
+ASTERISK_ARI_PASSWORD=arisecret
 EOF
 
     # sostituzioni compatibili sh
@@ -118,6 +126,10 @@ MARIADB_CONTAINER="$PROJECT_NAME-mariadb"
 MARIADB_VOLUME="$PROJECT_NAME-mariadb-data"
 PGSQL_CONTAINER="$PROJECT_NAME-postgres"
 PGSQL_VOLUME="$PROJECT_NAME-postgres-data"
+
+# Variabili derivate per Asterisk
+ASTERISK_CONTAINER="$PROJECT_NAME-asterisk"
+ASTERISK_VOLUME="$PROJECT_NAME-asterisk-data"
 
 # Creates MariaDB container
 # - Network: ${DEV_NETWORK} (<project>-dev)
@@ -292,6 +304,7 @@ if [ "$1" = "--origin" ]; then
     echo "  ./install.sh --dev       # Per generare l'applicazione"
     echo "  ./install.sh --mariadb   # Per creare container MariaDB"
     echo "  ./install.sh --postgres  # Per creare container PostgreSQL"
+    echo "  ./install.sh --asterisk  # Per creare container Asterisk"
     echo ""
     exit 0
 fi
@@ -412,6 +425,136 @@ setup_pgsql_database() {
     echo "  Setup PostgreSQL completato"
 }
 
+# Creates Asterisk container
+# - Network: ${DEV_NETWORK} (<project>-dev)
+# - Container: ${ASTERISK_CONTAINER} (<project>-asterisk)
+# - Volume: ${ASTERISK_VOLUME} (<project>-asterisk-data)
+# - Ports: ${ASTERISK_PORT_HTTP}:8088 (HTTP/ARI), ${ASTERISK_PORT_SIP}:5060/udp (SIP), RTP range
+# - Credentials: user=ariuser, password=arisecret
+# - Starts existing container if present
+create_asterisk_container() {
+    if ! docker network ls --format "{{.Name}}" | grep -q "^${DEV_NETWORK}$"; then
+        docker network create "$DEV_NETWORK" >/dev/null 2>&1 || true
+    fi
+
+    if docker ps -a --format "{{.Names}}" | grep -q "^${ASTERISK_CONTAINER}$"; then
+        if docker ps --format "{{.Names}}" | grep -q "^${ASTERISK_CONTAINER}$"; then
+            echo "Asterisk container già in esecuzione."
+            return 0
+        fi
+        docker start "$ASTERISK_CONTAINER" >/dev/null 2>&1 || {
+            echo "Errore nell'avvio del container Asterisk."
+            return 1
+        }
+        echo "Container Asterisk avviato."
+        return 0
+    fi
+
+    if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${ASTERISK_IMAGE}$"; then
+        echo "Download immagine Asterisk..."
+        docker pull "$ASTERISK_IMAGE" >/dev/null 2>&1
+    fi
+
+    echo "Creazione container Asterisk..."
+    docker run -d --name "$ASTERISK_CONTAINER" --network "$DEV_NETWORK" \
+        -p "$ASTERISK_PORT_HTTP:8088" \
+        -p "$ASTERISK_PORT_SIP:5060/udp" \
+        -p "$ASTERISK_PORT_RTP_START-$ASTERISK_PORT_RTP_END:$ASTERISK_PORT_RTP_START-$ASTERISK_PORT_RTP_END/udp" \
+        -v "$ASTERISK_VOLUME:/var/lib/asterisk" \
+        "$ASTERISK_IMAGE" >/dev/null 2>&1 || {
+            echo "Errore nella creazione del container Asterisk."
+            return 1
+        }
+
+    echo "Container Asterisk creato e avviato."
+    echo "  HTTP/ARI: localhost:$ASTERISK_PORT_HTTP"
+    echo "  SIP: localhost:$ASTERISK_PORT_SIP"
+    echo "  ARI User: $ASTERISK_ARI_USER"
+    echo "  ARI Password: $ASTERISK_ARI_PASSWORD"
+}
+
+# Setup Asterisk configuration files
+setup_asterisk_config() {
+    echo "  Configurazione Asterisk..."
+
+    # Check if config templates exist
+    if [ ! -d ".toolchain/asterisk/config" ]; then
+        echo "  [WARN] Template di configurazione non trovati in .toolchain/asterisk/config"
+        return 1
+    fi
+
+    # Wait for Asterisk to be ready
+    echo "  Attesa disponibilità Asterisk..."
+    sleep 3
+
+    # Copy configuration files to container
+    echo "  Copia file di configurazione..."
+
+    # ari.conf
+    if [ -f ".toolchain/asterisk/config/ari.conf" ]; then
+        docker cp .toolchain/asterisk/config/ari.conf "$ASTERISK_CONTAINER:/etc/asterisk/ari.conf" >/dev/null 2>&1
+        echo "    ✓ ari.conf"
+    fi
+
+    # http.conf
+    if [ -f ".toolchain/asterisk/config/http.conf" ]; then
+        docker cp .toolchain/asterisk/config/http.conf "$ASTERISK_CONTAINER:/etc/asterisk/http.conf" >/dev/null 2>&1
+        echo "    ✓ http.conf"
+    fi
+
+    # extensions.conf
+    if [ -f ".toolchain/asterisk/config/extensions.conf" ]; then
+        docker cp .toolchain/asterisk/config/extensions.conf "$ASTERISK_CONTAINER:/etc/asterisk/extensions.conf" >/dev/null 2>&1
+        echo "    ✓ extensions.conf"
+    fi
+
+    # pjsip.conf (optional, for SIP endpoints)
+    if [ -f ".toolchain/asterisk/config/pjsip.conf" ]; then
+        docker cp .toolchain/asterisk/config/pjsip.conf "$ASTERISK_CONTAINER:/etc/asterisk/pjsip.conf" >/dev/null 2>&1
+        echo "    ✓ pjsip.conf"
+    fi
+
+    # Reload Asterisk configuration
+    echo "  Ricaricamento configurazione Asterisk..."
+    docker exec "$ASTERISK_CONTAINER" asterisk -rx "core reload" >/dev/null 2>&1 || true
+
+    echo "  Configurazione Asterisk completata"
+}
+
+# Configure application.properties for Asterisk
+configure_asterisk_properties() {
+    PROPS_FILE="src/main/resources/application.properties"
+
+    if [ ! -f "$PROPS_FILE" ]; then
+        echo "ERRORE: File $PROPS_FILE non trovato. Esegui prima './install.sh --dev'"
+        return 1
+    fi
+
+    echo "  Configurazione application.properties per Asterisk..."
+
+    # Update telephony provider to asterisk
+    if grep -q "^telephony.provider=" "$PROPS_FILE"; then
+        sed "s|^telephony\.provider=.*|telephony.provider=asterisk|" "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
+    fi
+
+    # Update baseUrl to point to container
+    if grep -q "^telephony.baseUrl=" "$PROPS_FILE"; then
+        sed "s|^telephony\.baseUrl=.*|telephony.baseUrl=http://$ASTERISK_CONTAINER:8088|" "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
+    fi
+
+    # Update username
+    if grep -q "^telephony.username=" "$PROPS_FILE"; then
+        sed "s|^telephony\.username=.*|telephony.username=$ASTERISK_ARI_USER|" "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
+    fi
+
+    # Update password
+    if grep -q "^telephony.password=" "$PROPS_FILE"; then
+        sed "s|^telephony\.password=.*|telephony.password=$ASTERISK_ARI_PASSWORD|" "$PROPS_FILE" > "$PROPS_FILE.tmp" && mv "$PROPS_FILE.tmp" "$PROPS_FILE"
+    fi
+
+    echo "  application.properties configurato per Asterisk"
+}
+
 # Gestione opzione --mariadb
 if [ "$1" = "--mariadb" ]; then
     if [ "$MARIADB_ENABLED" != "y" ]; then
@@ -510,6 +653,58 @@ if [ "$1" = "--postgres" ]; then
     exit 0
 fi
 
+# Gestione opzione --asterisk
+if [ "$1" = "--asterisk" ]; then
+    if [ "$ASTERISK_ENABLED" != "y" ]; then
+        echo "ERRORE: Asterisk non è abilitato nel file .env"
+        echo "Imposta ASTERISK_ENABLED=y nel file .env per continuare"
+        exit 1
+    fi
+
+    echo "Configurazione Asterisk..."
+
+    # Check if dev container is running
+    if ! docker ps --format '{{.Names}}' | grep -q "^$DEV_CONTAINER$"; then
+        echo "ERRORE: Container dev '$DEV_CONTAINER' non in esecuzione."
+        echo "Esegui prima './install.sh' per avviare il container dev."
+        exit 1
+    fi
+
+    # Create Asterisk container
+    create_asterisk_container
+
+    # Setup Asterisk configuration
+    setup_asterisk_config
+
+    # Check if application is generated
+    if [ ! -f pom.xml ]; then
+        echo ""
+        echo "=========================================="
+        echo "Asterisk container creato!"
+        echo "=========================================="
+        echo ""
+        echo "Esegui './install.sh --dev' per generare l'applicazione"
+        echo "e configurare automaticamente Asterisk."
+        exit 0
+    fi
+
+    # Configure application.properties
+    configure_asterisk_properties || exit 1
+
+    echo ""
+    echo "=========================================="
+    echo "Asterisk configurato e pronto!"
+    echo "=========================================="
+    echo "  HTTP/ARI: localhost:$ASTERISK_PORT_HTTP"
+    echo "  SIP: localhost:$ASTERISK_PORT_SIP"
+    echo "  ARI User: $ASTERISK_ARI_USER"
+    echo ""
+    echo "Test connessione ARI:"
+    echo "  curl -u $ASTERISK_ARI_USER:$ASTERISK_ARI_PASSWORD http://localhost:$ASTERISK_PORT_HTTP/ari/asterisk/info"
+    echo ""
+    exit 0
+fi
+
 # Step 1: Crea e avvia il container
 if [ "$1" != "--dev" ]; then
     # Verifica se il container esiste già
@@ -548,6 +743,7 @@ if [ "$1" != "--dev" ]; then
     echo "  ./install.sh --dev        # Genera l'applicazione Spring Boot dall'archetipo"
     echo "  ./install.sh --mariadb    # Crea container MariaDB"
     echo "  ./install.sh --postgres   # Crea container PostgreSQL"
+    echo "  ./install.sh --asterisk   # Crea container Asterisk (Telephony)"
     exit 0
 fi
 
@@ -662,6 +858,23 @@ if [ "$PGSQL_ENABLED" = "y" ]; then
     configure_pgsql_properties
 
     echo "PostgreSQL configurato in application.properties"
+fi
+
+if [ "$ASTERISK_ENABLED" = "y" ]; then
+    echo ""
+    echo "Asterisk abilitato - configurazione..."
+
+    # Check if Asterisk container exists
+    if ! docker exec "$ASTERISK_CONTAINER" asterisk -rx "core show version" >/dev/null 2>&1; then
+        echo "ERRORE: Asterisk è abilitato (ASTERISK_ENABLED=y) ma il container '$ASTERISK_CONTAINER' non è raggiungibile."
+        echo "Installalo con: ./install.sh --asterisk"
+        exit 1
+    fi
+
+    # Configure application.properties
+    configure_asterisk_properties
+
+    echo "Asterisk configurato in application.properties"
 fi
 
 echo ""
