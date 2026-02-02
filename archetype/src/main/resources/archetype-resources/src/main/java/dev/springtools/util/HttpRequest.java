@@ -1,4 +1,4 @@
-package ${package}.util;
+package dev.springtools.util;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.Part;

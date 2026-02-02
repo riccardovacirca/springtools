@@ -1,54 +1,67 @@
 package ${package}.module.status.dao;
 
-import ${package}.util.DB;
-import ${package}.util.DB.Record;
-import ${package}.util.DB.Recordset;
 import ${package}.module.status.dto.StatusLogDto;
-import org.springframework.stereotype.Repository;
-
-import javax.sql.DataSource;
+import dev.springtools.util.DB;
+import dev.springtools.util.DB.Record;
+import dev.springtools.util.DB.Recordset;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import javax.sql.DataSource;
+import org.springframework.stereotype.Component;
 
-@Repository
-public class StatusDao {
+@Component
+public class StatusDao
+{
 
-    private final DataSource dataSource;
+  private final DataSource dataSource;
 
-    public StatusDao(DataSource dataSource) {
-        this.dataSource = dataSource;
+  public StatusDao(DataSource dataSource)
+  {
+    this.dataSource = dataSource;
+  }
+
+  public long insertLog(String message) throws Exception
+  {
+    DB db;
+    String sql;
+    long id;
+
+    db = new DB(dataSource);
+    try {
+      db.open();
+      sql = "INSERT INTO status_logs (message, created_at) VALUES (?, ?)";
+      db.query(sql, message, DB.toSqlTimestamp(LocalDateTime.now()));
+      id = db.lastInsertId();
+      return id;
+    } finally {
+      db.close();
     }
+  }
 
-    public long insertLog(String message) throws Exception {
-        DB db = new DB(dataSource);
-        try {
-            db.open();
-            db.query("INSERT INTO status_logs (message, created_at) VALUES (?, ?)",
-                    message, DB.toSqlTimestamp(LocalDateTime.now()));
-            return db.lastInsertId();
-        } finally {
-            db.close();
-        }
-    }
+  public List<StatusLogDto> findLogs(int limit, int offset) throws Exception
+  {
+    DB db;
+    List<StatusLogDto> logs;
+    String sql;
+    Recordset rs;
 
-    public List<StatusLogDto> findLogs(int limit, int offset) throws Exception {
-        DB db = new DB(dataSource);
-        List<StatusLogDto> logs = new ArrayList<>();
-        try {
-            db.open();
-            Recordset rs = db.select("SELECT id, message, created_at FROM status_logs ORDER BY id DESC LIMIT ? OFFSET ?",
-                    limit, offset);
-            for (Record r : rs) {
-                logs.add(new StatusLogDto(
-                        DB.toLong(r.get("id")),
-                        DB.toString(r.get("message")),
-                        DB.toLocalDateTime(r.get("created_at"))
-                ));
-            }
-            return logs;
-        } finally {
-            db.close();
-        }
+    db = new DB(dataSource);
+    try {
+      db.open();
+      logs = new ArrayList<>();
+      sql = "SELECT id, message, created_at FROM status_logs ORDER BY id DESC LIMIT ? OFFSET ?";
+      rs = db.select(sql, limit, offset);
+      for (Record r : rs) {
+        logs.add(
+            new StatusLogDto(
+                DB.toLong(r.get("id")),
+                DB.toString(r.get("message")),
+                DB.toLocalDateTime(r.get("created_at"))));
+      }
+      return logs;
+    } finally {
+      db.close();
     }
+  }
 }

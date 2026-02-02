@@ -1,4 +1,4 @@
-package ${package}.util;
+package dev.springtools.util;
 
 import javax.naming.Context;
 import javax.naming.InitialContext;

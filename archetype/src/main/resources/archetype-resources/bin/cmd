@@ -36,15 +36,16 @@ Usage: cmd COMMAND [OPTIONS]
 
 App (Spring Boot):
   app build                Build application
-  app run                  Run in dev mode (background)
-  app start                Start production JAR
+  app run                  Run in dev mode (foreground)
+  app start                Start production JAR (background)
   app stop                 Stop application
   app restart              Restart application
   app status               Show status
+  app format               Format code with Spotless
 
 GUI (Vite/Svelte):
   gui build                Build GUI for production
-  gui run                  Run Vite dev server
+  gui run                  Run Vite dev server (foreground)
   gui stop                 Stop Vite server
   gui restart              Restart Vite server
   gui status               Show status
@@ -61,6 +62,7 @@ Git:
 Database:
   db                       Open interactive database CLI
   db -f <file>             Execute SQL or CSV file
+  db reset                 Reset database (drop and re-run migrations)
 
 Sync:
   sync -r <path>           Sync using .sync config file
@@ -235,58 +237,32 @@ app_is_running() {
 
 app_run() {
     load_env
-    
+
     if app_is_running; then
         warn "Application is already running (PID: $(cat $APP_PID_FILE))"
         info "Use 'cmd app stop' to stop it first"
         return 0
     fi
 
-    info "Starting Spring Boot in development mode with auto-reload..."
+    info "Starting Spring Boot in development mode (foreground)..."
+    info "Internal: http://localhost:${DEV_PORT}/"
+    info "External: http://localhost:${DEV_PORT_HOST}/"
+    info "Press Ctrl+C to stop"
     cd "$WORKSPACE"
 
-    # Create timestamp file for tracking changes
-    TIMESTAMP_FILE="$WORKSPACE/tmp/.watch_timestamp"
-    touch "$TIMESTAMP_FILE"
+    # Start Spring Boot in foreground
+    mvn spring-boot:run
+}
 
-    # Start a background process to watch for changes and compile
-    (
-        while true; do
-            sleep 2
-            # Check if any Java file is newer than our timestamp
-            if find src/main/java -name '*.java' -newer "$TIMESTAMP_FILE" 2>/dev/null | grep -q .; then
-                echo "[WATCH] Detected changes, recompiling..."
-                touch "$TIMESTAMP_FILE"
-                mvn compile -q 2>&1 | grep -v "^\[INFO\]" || true
-                echo "[WATCH] Compilation done"
-            fi
-        done
-    ) &
-    WATCH_PID=$!
-    echo $WATCH_PID > "$APP_WATCH_PID_FILE"
+app_format() {
+    load_env
+    info "Formatting code with Spotless..."
+    cd "$WORKSPACE"
 
-    info "File watcher started (PID: $WATCH_PID)"
-    info "DevTools enabled - save a Java file and it will auto-reload"
-
-    # Start Spring Boot in background
-    nohup mvn spring-boot:run > "$WORKSPACE/logs/app.log" 2>&1 &
-    MAVEN_PID=$!
-    echo $MAVEN_PID > "$APP_PID_FILE"
-
-    sleep 3
-    if app_is_running; then
-        success "Application started in development mode (PID: $MAVEN_PID)"
-        info "Log: $WORKSPACE/logs/app.log"
-        info "Internal: http://localhost:${DEV_PORT}/"
-        info "External: http://localhost:${DEV_PORT_HOST}/"
-        info "Use 'cmd app stop' to stop the application"
-        info "Use 'tail -f logs/app.log' to follow the logs"
+    if mvn spotless:apply; then
+        success "Code formatted successfully"
     else
-        # Clean up watcher if app failed to start
-        kill $WATCH_PID 2>/dev/null || true
-        rm -f "$APP_WATCH_PID_FILE"
-        rm -f "$TIMESTAMP_FILE"
-        error "Failed to start application. Check logs/app.log"
+        error "Spotless formatting failed. Check the output above."
     fi
 }
 
@@ -322,20 +298,14 @@ gui_run() {
         error "GUI directory not found: $GUI_DIR"
     fi
 
-    info "Starting Vite dev server..."
+    info "Starting Vite dev server (foreground)..."
+    info "URL: http://localhost:${VITE_PORT}/"
+    info "API proxy: /api/* -> http://localhost:${DEV_PORT}/"
+    info "Press Ctrl+C to stop"
     cd "$GUI_DIR"
-    nohup npm run dev > "$WORKSPACE/logs/gui.log" 2>&1 &
-    echo $! > "$GUI_PID_FILE"
 
-    sleep 2
-    if gui_is_running; then
-        success "Vite dev server started (PID: $(cat $GUI_PID_FILE))"
-        info "Log: $WORKSPACE/logs/gui.log"
-        info "URL: http://localhost:${VITE_PORT}/"
-        info "API proxy: /api/* -> http://localhost:${DEV_PORT}/"
-    else
-        error "Failed to start Vite. Check logs/gui.log"
-    fi
+    # Start Vite in foreground
+    npm run dev
 }
 
 gui_stop() {
@@ -1011,6 +981,80 @@ EOF
     fi
 }
 
+# Database reset - drop and recreate database with migrations
+db_reset() {
+    load_env
+
+    local SQLITE_DB="$WORKSPACE/${DB_DIR:-data}/${PROJECT_NAME}.db"
+
+    warn "This will DELETE all data in the database and re-run migrations!"
+    confirm "Are you sure you want to reset the database?" || exit 0
+
+    # Check if app is running and stop it
+    local APP_WAS_RUNNING=false
+    if app_is_running; then
+        info "Stopping application..."
+        app_stop
+        APP_WAS_RUNNING=true
+    fi
+
+    # Delete database based on type
+    if [ "$PGSQL_ENABLED" = "y" ]; then
+        info "Resetting PostgreSQL database..."
+        export PGPASSWORD="$PGSQL_ROOT_PASSWORD"
+
+        # Drop and recreate database
+        info "  Dropping database $PGSQL_NAME..."
+        psql -h "${PROJECT_NAME}-postgres" -p 5432 -U "$PGSQL_ROOT_USER" -d postgres \
+            -c "DROP DATABASE IF EXISTS $PGSQL_NAME;" 2>/dev/null || true
+
+        info "  Creating database $PGSQL_NAME..."
+        psql -h "${PROJECT_NAME}-postgres" -p 5432 -U "$PGSQL_ROOT_USER" -d postgres \
+            -c "CREATE DATABASE $PGSQL_NAME;" || error "Failed to create database"
+
+        info "  Granting privileges to $PGSQL_USER..."
+        psql -h "${PROJECT_NAME}-postgres" -p 5432 -U "$PGSQL_ROOT_USER" -d "$PGSQL_NAME" \
+            -c "GRANT ALL ON SCHEMA public TO \"$PGSQL_USER\";" 2>/dev/null || true
+
+    elif [ "$MARIADB_ENABLED" = "y" ]; then
+        info "Resetting MariaDB database..."
+
+        # Drop and recreate database
+        info "  Dropping database $MARIADB_NAME..."
+        mysql -h "${PROJECT_NAME}-mariadb" -P 3306 -u "$MARIADB_ROOT_USER" -p"$MARIADB_ROOT_PASSWORD" \
+            -e "DROP DATABASE IF EXISTS $MARIADB_NAME;" 2>/dev/null || true
+
+        info "  Creating database $MARIADB_NAME..."
+        mysql -h "${PROJECT_NAME}-mariadb" -P 3306 -u "$MARIADB_ROOT_USER" -p"$MARIADB_ROOT_PASSWORD" \
+            -e "CREATE DATABASE $MARIADB_NAME;" || error "Failed to create database"
+
+        info "  Granting privileges to $MARIADB_USER..."
+        mysql -h "${PROJECT_NAME}-mariadb" -P 3306 -u "$MARIADB_ROOT_USER" -p"$MARIADB_ROOT_PASSWORD" \
+            -e "GRANT ALL PRIVILEGES ON \`$MARIADB_NAME\`.* TO '$MARIADB_USER'@'%';" 2>/dev/null || true
+
+    else
+        # Default: SQLite
+        info "Resetting SQLite database..."
+        if [ -f "$SQLITE_DB" ]; then
+            info "  Removing database file: $SQLITE_DB"
+            rm -f "$SQLITE_DB" || error "Failed to remove database file"
+        else
+            info "  Database file does not exist, will be created on app start"
+        fi
+    fi
+
+    success "Database reset completed"
+
+    # Restart app if it was running
+    if [ "$APP_WAS_RUNNING" = true ]; then
+        info "Restarting application to run migrations..."
+        app_start
+        info "Migrations will be executed automatically by Flyway on startup"
+    else
+        info "Start the application with 'cmd app run' to execute migrations"
+    fi
+}
+
 # ============================================================================
 # Sync Operations (rsync based on .sync config)
 # ============================================================================
@@ -1111,8 +1155,11 @@ case "$1" in
             status)
                 app_status
                 ;;
+            format)
+                app_format
+                ;;
             *)
-                error "Unknown app command: $2. Use: build, run, start, stop, restart, status"
+                error "Unknown app command: $2. Use: build, run, start, stop, restart, status, format"
                 ;;
         esac
         ;;
@@ -1217,8 +1264,10 @@ case "$1" in
         elif [ "$1" = "-f" ]; then
             [ -z "$2" ] && error "Option -f requires a file path"
             db_cli "$2"
+        elif [ "$1" = "reset" ]; then
+            db_reset
         else
-            error "Unknown db option: $1. Use: db, db -f <file>"
+            error "Unknown db option: $1. Use: db, db -f <file>, db reset"
         fi
         ;;
     -h|--help|help|"")

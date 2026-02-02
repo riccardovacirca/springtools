@@ -10,7 +10,7 @@
     <version>1.0.0</version>
     <packaging>maven-archetype</packaging>
 
-    <name>Spring Boot + Svelte Archetype</name>
+    <name>SpringTools</name>
     <description>Maven archetype for Spring Boot with Svelte/Vite frontend and SQLite</description>
 
     <build>

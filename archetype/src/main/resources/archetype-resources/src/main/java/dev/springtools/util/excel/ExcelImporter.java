@@ -1,7 +1,7 @@
-package ${package}.util.excel;
+package dev.springtools.util.excel;
 
-import ${package}.util.excel.strategy.MappingStrategy;
-import ${package}.util.excel.strategy.NormalizationStrategy;
+import dev.springtools.util.excel.strategy.MappingStrategy;
+import dev.springtools.util.excel.strategy.NormalizationStrategy;
 
 import java.io.InputStream;
 import java.util.List;

@@ -1,4 +1,4 @@
-package ${package}.util;
+package dev.springtools.util;
 
 import java.time.DayOfWeek;
 import java.time.Instant;

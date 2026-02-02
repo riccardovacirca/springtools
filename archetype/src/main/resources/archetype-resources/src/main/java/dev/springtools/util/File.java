@@ -1,4 +1,4 @@
-package ${package}.util;
+package dev.springtools.util;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

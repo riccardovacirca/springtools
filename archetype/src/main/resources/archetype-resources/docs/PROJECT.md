@@ -26,7 +26,7 @@ L'esecuzione avviene all'interno di Docker.
 - Posizione: /gui
 
 ### Libreria Interna
-Percorso: /usr/src/app/src/main/java/dev/crm/utils
+Percorso: /usr/src/app/src/main/java/dev/springtools/util
 
 La libreria interna contiene utility per la maggior parte delle operazioni.
 Se una funzionalità manca, deve essere aggiunta alla libreria.
@@ -60,7 +60,7 @@ Un modulo completo si compone di tre parti:
 
 ## Gestione del Progetto
 
-### Cartella .toolchain
+### Cartella .springtools
 Contiene il repository del progetto di origine (springtools) da cui
 l'applicazione è stata generata.
 

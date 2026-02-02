@@ -1,4 +1,4 @@
-package ${package}.util;
+package dev.springtools.util;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 

@@ -1,4 +1,4 @@
-package ${package}.util.excel;
+package dev.springtools.util.excel;
 
 /**
  * Rappresenta l'esito di un'importazione Excel.

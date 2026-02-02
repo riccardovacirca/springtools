@@ -1,4 +1,4 @@
-package ${package}.util.excel.strategy;
+package dev.springtools.util.excel.strategy;
 
 import java.util.HashMap;
 import java.util.Map;

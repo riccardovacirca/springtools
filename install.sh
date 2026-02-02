@@ -82,6 +82,12 @@ ASTERISK_PORT_RTP_START=10000
 ASTERISK_PORT_RTP_END=10099
 ASTERISK_ARI_USER=ariuser
 ASTERISK_ARI_PASSWORD=arisecret
+
+# Prism Mock Server
+PRISM_ENABLED=n
+PRISM_IMAGE=stoplight/prism:latest
+PRISM_PORT=4010
+PRISM_SPEC_FILE=/docs/vonage/api.json
 EOF
 
     # sostituzioni compatibili sh
@@ -130,6 +136,9 @@ PGSQL_VOLUME="$PROJECT_NAME-postgres-data"
 # Variabili derivate per Asterisk
 ASTERISK_CONTAINER="$PROJECT_NAME-asterisk"
 ASTERISK_VOLUME="$PROJECT_NAME-asterisk-data"
+
+# Variabili derivate per Prism
+PRISM_CONTAINER="$PROJECT_NAME-prism"
 
 # Creates MariaDB container
 # - Network: ${DEV_NETWORK} (<project>-dev)
@@ -230,53 +239,97 @@ create_pgsql_container() {
 
 install_claude() {
     echo "Verifica installazione Claude Code..."
-    
+
     if docker exec "$DEV_CONTAINER" sh -c "command -v claude >/dev/null 2>&1"; then
         echo "Claude Code già installato."
         return 0
     fi
-    
+
     if ! docker exec "$DEV_CONTAINER" sh -c "command -v node >/dev/null 2>&1"; then
         echo "ERRORE: Node.js non trovato nel container."
         echo "Node.js verrà installato durante la generazione dell'applicazione (./install.sh --dev)"
         return 1
     fi
-    
+
     echo "Installazione Claude Code CLI..."
     if ! docker exec "$DEV_CONTAINER" npm install -g @anthropic-ai/claude-code; then
         echo "ERRORE: Installazione Claude Code fallita."
         return 1
     fi
-    
+
     if ! docker exec "$DEV_CONTAINER" sh -c "command -v claude >/dev/null 2>&1"; then
         echo "ERRORE: Verifica installazione Claude Code fallita."
         return 1
     fi
-    
+
     # Copy Claude Code configuration from archetype if exists
     if [ -d "springtools/archetype/src/main/resources/archetype-resources/.claude" ]; then
         echo "Installazione configurazione Claude Code..."
-        
+
         # Preserve settings.local.json if exists
         if [ -f ".claude/settings.local.json" ]; then
             cp .claude/settings.local.json /tmp/claude-settings.local.json.bak
         fi
-        
+
         rm -rf .claude
         cp -r springtools/archetype/src/main/resources/archetype-resources/.claude .claude
-        
+
         # Restore settings.local.json
         if [ -f "/tmp/claude-settings.local.json.bak" ]; then
             cp /tmp/claude-settings.local.json.bak .claude/settings.local.json
             rm /tmp/claude-settings.local.json.bak
             echo "Preservato settings.local.json esistente"
         fi
-        
+
         echo "Configurazione Claude Code installata in .claude/"
     fi
-    
+
     echo "Claude Code installato con successo."
     echo "Usa 'docker exec -it $DEV_CONTAINER claude' per avviare Claude Code CLI"
+}
+
+# Creates Prism Mock Server container
+# - Network: ${DEV_NETWORK} (<project>-dev)
+# - Container: ${PRISM_CONTAINER} (<project>-prism)
+# - Port: ${PRISM_PORT}:4010 (default 4010:4010)
+# - Volume: ./docs:/docs (OpenAPI specs)
+# - Spec file: ${PRISM_SPEC_FILE} (default /docs/vonage/api.json)
+# - Starts existing container if present
+create_prism_container() {
+    if ! docker network ls --format "{{.Name}}" | grep -q "^${DEV_NETWORK}$"; then
+        docker network create "$DEV_NETWORK" >/dev/null 2>&1 || true
+    fi
+
+    if docker ps -a --format "{{.Names}}" | grep -q "^${PRISM_CONTAINER}$"; then
+        if docker ps --format "{{.Names}}" | grep -q "^${PRISM_CONTAINER}$"; then
+            echo "Prism container già in esecuzione."
+            return 0
+        fi
+        docker start "$PRISM_CONTAINER" >/dev/null 2>&1 || {
+            echo "Errore nell'avvio del container Prism."
+            return 1
+        }
+        echo "Container Prism avviato."
+        return 0
+    fi
+
+    if ! docker images --format "{{.Repository}}:{{.Tag}}" | grep -q "^${PRISM_IMAGE}$"; then
+        echo "Download immagine Prism..."
+        docker pull "$PRISM_IMAGE" >/dev/null 2>&1
+    fi
+
+    echo "Creazione container Prism..."
+    docker run -d --name "$PRISM_CONTAINER" --network "$DEV_NETWORK" \
+        -p "$PRISM_PORT:4010" \
+        -v "$PWD/docs:/docs:ro" \
+        "$PRISM_IMAGE" mock -h 0.0.0.0 -p 4010 "$PRISM_SPEC_FILE" >/dev/null 2>&1 || {
+            echo "Errore nella creazione del container Prism."
+            return 1
+        }
+
+    echo "Container Prism creato e avviato."
+    echo "  Mock Server: localhost:$PRISM_PORT"
+    echo "  OpenAPI Spec: $PRISM_SPEC_FILE"
 }
 
 # Gestione opzione --origin
@@ -305,6 +358,51 @@ if [ "$1" = "--origin" ]; then
     echo "  ./install.sh --mariadb   # Per creare container MariaDB"
     echo "  ./install.sh --postgres  # Per creare container PostgreSQL"
     echo "  ./install.sh --asterisk  # Per creare container Asterisk"
+    echo "  ./install.sh --prism     # Per installare Prism mock server"
+    echo ""
+    exit 0
+fi
+
+# Gestione opzione --prism
+if [ "$1" = "--prism" ]; then
+    if [ "$PRISM_ENABLED" != "y" ]; then
+        echo "ERRORE: Prism non è abilitato nel file .env"
+        echo "Imposta PRISM_ENABLED=y nel file .env per continuare"
+        exit 1
+    fi
+
+    echo "Configurazione Prism Mock Server..."
+
+    # Check if docs directory exists
+    if [ ! -d "docs/vonage" ]; then
+        echo "ERRORE: Directory docs/vonage non trovata."
+        echo "Assicurati che la documentazione OpenAPI sia presente."
+        exit 1
+    fi
+
+    # Create Prism container
+    create_prism_container
+
+    echo ""
+    echo "=========================================="
+    echo "Prism Mock Server configurato e pronto!"
+    echo "=========================================="
+    echo "  Mock Server: localhost:$PRISM_PORT"
+    echo "  OpenAPI Spec: $PRISM_SPEC_FILE"
+    echo ""
+    echo "Test connessione:"
+    echo "  curl http://localhost:$PRISM_PORT"
+    echo ""
+    echo "Test chiamata API mock:"
+    echo "  curl -X POST http://localhost:$PRISM_PORT/v1/calls \\"
+    echo "    -H 'Content-Type: application/json' \\"
+    echo "    -d '{\"to\":[{\"type\":\"phone\",\"number\":\"393331234567\"}],\"from\":{\"type\":\"phone\",\"number\":\"393337654321\"},\"answer_url\":[\"https://example.com/answer\"]}'"
+    echo ""
+    echo "Stop del container:"
+    echo "  docker stop $PRISM_CONTAINER"
+    echo ""
+    echo "Riavvio del container:"
+    echo "  docker start $PRISM_CONTAINER"
     echo ""
     exit 0
 fi
@@ -478,8 +576,8 @@ setup_asterisk_config() {
     echo "  Configurazione Asterisk..."
 
     # Check if config templates exist
-    if [ ! -d ".toolchain/asterisk/config" ]; then
-        echo "  [WARN] Template di configurazione non trovati in .toolchain/asterisk/config"
+    if [ ! -d ".springtools/asterisk/config" ]; then
+        echo "  [WARN] Template di configurazione non trovati in .springtools/asterisk/config"
         return 1
     fi
 
@@ -491,26 +589,26 @@ setup_asterisk_config() {
     echo "  Copia file di configurazione..."
 
     # ari.conf
-    if [ -f ".toolchain/asterisk/config/ari.conf" ]; then
-        docker cp .toolchain/asterisk/config/ari.conf "$ASTERISK_CONTAINER:/etc/asterisk/ari.conf" >/dev/null 2>&1
+    if [ -f ".springtools/asterisk/config/ari.conf" ]; then
+        docker cp .springtools/asterisk/config/ari.conf "$ASTERISK_CONTAINER:/etc/asterisk/ari.conf" >/dev/null 2>&1
         echo "    ✓ ari.conf"
     fi
 
     # http.conf
-    if [ -f ".toolchain/asterisk/config/http.conf" ]; then
-        docker cp .toolchain/asterisk/config/http.conf "$ASTERISK_CONTAINER:/etc/asterisk/http.conf" >/dev/null 2>&1
+    if [ -f ".springtools/asterisk/config/http.conf" ]; then
+        docker cp .springtools/asterisk/config/http.conf "$ASTERISK_CONTAINER:/etc/asterisk/http.conf" >/dev/null 2>&1
         echo "    ✓ http.conf"
     fi
 
     # extensions.conf
-    if [ -f ".toolchain/asterisk/config/extensions.conf" ]; then
-        docker cp .toolchain/asterisk/config/extensions.conf "$ASTERISK_CONTAINER:/etc/asterisk/extensions.conf" >/dev/null 2>&1
+    if [ -f ".springtools/asterisk/config/extensions.conf" ]; then
+        docker cp .springtools/asterisk/config/extensions.conf "$ASTERISK_CONTAINER:/etc/asterisk/extensions.conf" >/dev/null 2>&1
         echo "    ✓ extensions.conf"
     fi
 
     # pjsip.conf (optional, for SIP endpoints)
-    if [ -f ".toolchain/asterisk/config/pjsip.conf" ]; then
-        docker cp .toolchain/asterisk/config/pjsip.conf "$ASTERISK_CONTAINER:/etc/asterisk/pjsip.conf" >/dev/null 2>&1
+    if [ -f ".springtools/asterisk/config/pjsip.conf" ]; then
+        docker cp .springtools/asterisk/config/pjsip.conf "$ASTERISK_CONTAINER:/etc/asterisk/pjsip.conf" >/dev/null 2>&1
         echo "    ✓ pjsip.conf"
     fi
 
@@ -744,6 +842,7 @@ if [ "$1" != "--dev" ]; then
     echo "  ./install.sh --mariadb    # Crea container MariaDB"
     echo "  ./install.sh --postgres   # Crea container PostgreSQL"
     echo "  ./install.sh --asterisk   # Crea container Asterisk (Telephony)"
+    echo "  ./install.sh --prism      # Installa Prism mock server nel container"
     exit 0
 fi
 
@@ -888,14 +987,14 @@ if [ -d .git ]; then
     echo "Repository git locale rimosso"
 fi
 
-echo "Clone repository originale in .toolchain..."
-if [ -d .toolchain ]; then
-    echo ".toolchain già esistente, verrà aggiornato"
-    rm -rf .toolchain
+echo "Clone repository originale in .springtools..."
+if [ -d .springtools ]; then
+    echo ".springtools già esistente, verrà aggiornato"
+    rm -rf .springtools
 fi
 
-if git clone https://github.com/riccardovacirca/springtools.git .toolchain; then
-    echo "Repository originale clonato in .toolchain/"
+if git clone https://github.com/riccardovacirca/springtools.git .springtools; then
+    echo "Repository originale clonato in .springtools/"
 else
     echo "ATTENZIONE: Clone del repository fallito. Verifica la connessione."
 fi
@@ -904,4 +1003,5 @@ echo "Pulizia file di installazione..."
 docker exec "$DEV_CONTAINER" rm -rf archetype
 docker exec "$DEV_CONTAINER" rm -f TODO.md
 docker exec "$DEV_CONTAINER" rm -f install.sh
-echo "File di installazione rimossi (disponibili in .toolchain/)"
+docker exec "$DEV_CONTAINER" rm -f .env.example
+echo "File di installazione rimossi (disponibili in .springtools/)"
