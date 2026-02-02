@@ -1,5 +1,5 @@
 <script>
-  export let currentView = 'health';
+  export let state = { currentView: 'health' };
   export let onViewChange = () => {};
 </script>
 
@@ -7,13 +7,13 @@
   <div class="sidebar-title">Status</div>
   <nav class="sidebar-nav">
     <button
-      class:active={currentView === 'health'}
+      class:active={state.currentView === 'health'}
       onclick={() => onViewChange('health')}
     >
       Health
     </button>
     <button
-      class:active={currentView === 'logs'}
+      class:active={state.currentView === 'logs'}
       onclick={() => onViewChange('logs')}
     >
       Logs

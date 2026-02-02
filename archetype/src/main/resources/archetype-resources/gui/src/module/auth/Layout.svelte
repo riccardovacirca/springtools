@@ -1,7 +1,7 @@
 <script>
     import LoginComponent from './LoginComponent.svelte';
     import SessionComponent from './SessionComponent.svelte';
-    import { user } from './store.js';
+    import { auth } from '../../store.js';
 </script>
 
 <nav class="module-nav">
@@ -9,7 +9,7 @@
 </nav>
 
 <main>
-    {#if $user}
+    {#if $auth.isAuthenticated && $auth.user}
         <SessionComponent />
     {:else}
         <LoginComponent />

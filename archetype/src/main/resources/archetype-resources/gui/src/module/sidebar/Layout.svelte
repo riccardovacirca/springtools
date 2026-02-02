@@ -1,91 +1,100 @@
 <script>
-  import { contextSidebar, contextSidebarProps } from "./store.js";
+  import { currentModule, currentModuleName, currentSubPath } from "../../store.js"
+  import { contextSidebar, contextSidebarProps } from "./store.js"
+
+  const menuItems = [
+    { id: 'status', label: 'Status', icon: '📊' }
+  ]
+
+  function handleNavigate(moduleId, subPath = '') {
+    currentModule.navigate(moduleId, subPath)
+    // Chiudi offcanvas su mobile dopo il click
+    const offcanvas = document.getElementById('sidebarOffcanvas')
+    if (offcanvas) {
+      const bsOffcanvas = bootstrap.Offcanvas.getInstance(offcanvas)
+      if (bsOffcanvas) bsOffcanvas.hide()
+    }
+  }
+
+  function handleSubNavigate(subPath) {
+    currentModule.navigate($currentModuleName, subPath)
+    const offcanvas = document.getElementById('sidebarOffcanvas')
+    if (offcanvas) {
+      const bsOffcanvas = bootstrap.Offcanvas.getInstance(offcanvas)
+      if (bsOffcanvas) bsOffcanvas.hide()
+    }
+  }
 </script>
 
-<div class="sidebar-layout">
-  <div class="sidebar-header">
-    <h3>CRM</h3>
+<div class="d-flex flex-column h-100">
+  <!-- Brand -->
+  <div class="p-3 border-bottom border-secondary">
+    <h5 class="mb-0">CRM</h5>
   </div>
 
-  <nav class="sidebar-static">
-    <button class="active">Status</button>
+  <!-- Navigation Statica: Menu Principale -->
+  <nav class="sidebar-static py-3 border-bottom border-secondary">
+    <div class="px-3 mb-2">
+      <small class="text-muted text-uppercase fw-bold">Menu Principale</small>
+    </div>
+    {#each menuItems as item}
+      <button
+        class="nav-item w-100 text-start px-3 py-2 border-0 d-flex align-items-center gap-2"
+        class:active={$currentModuleName === item.id}
+        onclick={() => handleNavigate(item.id)}
+      >
+        <span class="fs-5">{item.icon}</span>
+        <span>{item.label}</span>
+      </button>
+    {/each}
   </nav>
 
-  {#if $contextSidebar}
-    <div class="sidebar-dynamic">
-      <svelte:component this={$contextSidebar} {...$contextSidebarProps} />
-    </div>
-  {/if}
+  <!-- Area Dinamica: Menu Contestuale del Modulo -->
+  <div class="sidebar-dynamic flex-grow-1 overflow-auto">
+    {#if $contextSidebar}
+      {@const SidebarComponent = $contextSidebar}
+      <SidebarComponent
+        state={$contextSidebarProps.state}
+        onViewChange={$contextSidebarProps.onViewChange}
+      />
+    {/if}
+  </div>
 </div>
 
 <style>
-  .sidebar-layout {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    color: white;
-  }
-
-  .sidebar-header {
-    padding: 1.5rem 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  }
-  .sidebar-header h3 {
-    margin: 0;
-    font-size: 1.25rem;
-  }
-
   .sidebar-static {
-    padding: 1rem 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
-  .sidebar-static button {
-    display: block;
-    width: 100%;
-    padding: 0.75rem 1rem;
-    background: none;
-    border: none;
+
+  .nav-item {
+    background: transparent;
     color: rgba(255, 255, 255, 0.7);
-    text-align: left;
-    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.2s;
   }
-  .sidebar-static button:hover {
+
+  .nav-item:hover {
     background: rgba(255, 255, 255, 0.1);
     color: white;
   }
-  .sidebar-static button.active {
+
+  .nav-item.active {
     background: rgba(255, 255, 255, 0.15);
     color: white;
-    border-left: 3px solid #3498db;
+    border-left-color: #0d6efd;
   }
 
   .sidebar-dynamic {
-    flex: 1;
-    padding: 1rem 0;
+    color: rgba(255, 255, 255, 0.8);
   }
-  .dynamic-title {
-    padding: 0.5rem 1rem;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.5);
-    letter-spacing: 0.05em;
+
+  .sidebar-dynamic :global(.btn-outline-light) {
+    border-color: rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.7);
   }
-  .dynamic-nav button {
-    display: block;
-    width: 100%;
-    padding: 0.5rem 1rem 0.5rem 1.5rem;
-    background: none;
-    border: none;
-    color: rgba(255, 255, 255, 0.6);
-    text-align: left;
-    cursor: pointer;
-    font-size: 0.9rem;
-  }
-  .dynamic-nav button:hover {
-    background: rgba(255, 255, 255, 0.05);
+
+  .sidebar-dynamic :global(.btn-outline-light:hover) {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
     color: white;
-  }
-  .dynamic-nav button.active {
-    color: #3498db;
   }
 </style>

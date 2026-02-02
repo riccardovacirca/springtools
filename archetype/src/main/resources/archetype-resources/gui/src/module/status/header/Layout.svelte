@@ -1,5 +1,5 @@
 <script>
-  export let currentView = 'health';
+  export let state = { currentView: 'health' };
   export let onViewChange = () => {};
   export let isDropdown = false;
   export let onClose = () => {};
@@ -15,7 +15,7 @@
   <div class="status-header-dropdown">
     <button
       class="dropdown-item"
-      class:active={currentView === 'health'}
+      class:active={state.currentView === 'health'}
       onclick={() => handleItemClick('health')}
     >
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -25,7 +25,7 @@
     </button>
     <button
       class="dropdown-item"
-      class:active={currentView === 'logs'}
+      class:active={state.currentView === 'logs'}
       onclick={() => handleItemClick('logs')}
     >
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
