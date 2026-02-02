@@ -254,18 +254,6 @@ app_run() {
     mvn spring-boot:run
 }
 
-app_format() {
-    load_env
-    info "Formatting code with Spotless..."
-    cd "$WORKSPACE"
-
-    if mvn spotless:apply; then
-        success "Code formatted successfully"
-    else
-        error "Spotless formatting failed. Check the output above."
-    fi
-}
-
 # ============================================================================
 # GUI Operations (Vite/Svelte)
 # ============================================================================
@@ -1155,11 +1143,8 @@ case "$1" in
             status)
                 app_status
                 ;;
-            format)
-                app_format
-                ;;
             *)
-                error "Unknown app command: $2. Use: build, run, start, stop, restart, status, format"
+                error "Unknown app command: $2. Use: build, run, start, stop, restart, status"
                 ;;
         esac
         ;;

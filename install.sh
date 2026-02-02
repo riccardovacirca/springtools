@@ -891,6 +891,15 @@ docker exec "$DEV_CONTAINER" sh -c "
 
     # Rimuovi la cartella del progetto (anche se non è vuota)
     rm -rf $PROJECT_NAME
+
+    # Inietta libreria dev.springtools.util dal repository
+    echo \"Installazione libreria dev.springtools.util...\"
+    if [ -d \".springtools/lib/dev\" ]; then
+        cp -r .springtools/lib/dev src/main/java/
+        echo \"Libreria dev.springtools.util installata\"
+    else
+        echo \"[WARN] Libreria dev.springtools.util non trovata in .springtools/lib/\"
+    fi
 "
 
 echo "Installazione Node.js nel container..."
