@@ -58,6 +58,7 @@ Git:
   git branch [-r <path>]   Show current branch name
   git branch -b <name> [-r <path>] [-f <base-branch>]   Create branch from base (default: main)
   git merge -b <name> [-r <path>]    Merge branch to main and delete
+  git update               Update git config and remote URL from .env (GIT_USER, GIT_TOKEN)
 
 Database:
   db                       Open interactive database CLI
@@ -886,6 +887,56 @@ git_merge() {
     info "Note: Use 'cmd git push' to push merged changes to remote"
 }
 
+# Update git configuration with credentials from .env
+git_update() {
+    load_env
+
+    [ -z "$GIT_USER" ] && error "GIT_USER not set in .env file"
+    [ -z "$GIT_TOKEN" ] && error "GIT_TOKEN not set in .env file"
+
+    info "Updating git configuration..."
+
+    cd "$WORKSPACE"
+
+    # Configure git safe directory
+    git config --global --add safe.directory "$WORKSPACE" 2>/dev/null || true
+
+    # Set git user name globally
+    info "  Setting user.name: $GIT_USER"
+    git config --global user.name "$GIT_USER"
+
+    # Set git user email globally (if present in .env)
+    if [ -n "$GIT_EMAIL" ]; then
+        info "  Setting user.email: $GIT_EMAIL"
+        git config --global user.email "$GIT_EMAIL"
+    fi
+
+    # Update remote URL with credentials (only if .git exists)
+    if [ -d "$WORKSPACE/.git" ]; then
+        # Get current remote URL to extract repo name
+        CURRENT_REMOTE=$(git config --get remote.origin.url 2>/dev/null || echo "")
+
+        if [ -n "$CURRENT_REMOTE" ]; then
+            # Extract repo name from current remote URL
+            REPO_NAME=$(basename -s .git "$CURRENT_REMOTE")
+
+            # Build new remote URL with credentials
+            NEW_REMOTE_URL="https://${GIT_USER}:${GIT_TOKEN}@github.com/${GIT_USER}/${REPO_NAME}.git"
+
+            info "  Updating remote URL for repository: $REPO_NAME"
+            git remote set-url origin "$NEW_REMOTE_URL"
+            success "Remote URL updated"
+        else
+            warn "No remote origin found, skipping remote URL update"
+        fi
+    else
+        warn "Not a git repository, skipping remote URL update"
+    fi
+
+    success "Git configuration updated successfully"
+    info "User: $GIT_USER"
+}
+
 # ============================================================================
 # Database Operations
 # ============================================================================
@@ -1217,8 +1268,11 @@ case "$1" in
             merge)
                 git_merge "$BRANCH_NAME" "$REPO_PATH"
                 ;;
+            update)
+                git_update
+                ;;
             *)
-                error "Unknown git command: $GIT_CMD. Use: push, pull, sync, fetch, branch, merge"
+                error "Unknown git command: $GIT_CMD. Use: push, pull, sync, fetch, branch, merge, update"
                 ;;
         esac
         ;;
