@@ -51,6 +51,11 @@ GIT_EMAIL=
 GIT_TOKEN=
 
 # ========================================
+# Ngrok (per esporre endpoint pubblici)
+# ========================================
+NGROK_TOKEN=
+
+# ========================================
 # Database Containers
 # ========================================
 # MariaDB
@@ -861,6 +866,14 @@ fi
 
 echo "Installazione dipendenze nel container..."
 docker exec "$DEV_CONTAINER" sh -c "apt-get update -qq && apt-get install -y -qq sqlite3 git rsync >/dev/null 2>&1"
+
+echo "Installazione ngrok nel container..."
+docker exec "$DEV_CONTAINER" sh -c "
+    curl -sSL https://ngrok-agent.s3.amazonaws.com/ngrok.asc | tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null && \
+    echo 'deb https://ngrok-agent.s3.amazonaws.com bookworm main' | tee /etc/apt/sources.list.d/ngrok.list && \
+    apt-get update -qq && \
+    apt-get install -y -qq ngrok >/dev/null 2>&1
+"
 
 echo "Installazione archetipo nel repository Maven locale..."
 docker exec "$DEV_CONTAINER" mvn -f "$ARCHETYPE_DIR/pom.xml" clean install -q
