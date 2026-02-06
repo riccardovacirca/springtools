@@ -38,10 +38,29 @@ VITE_PORT=2350
 DEBUG_PORT=5005
 
 # ========================================
-# Configurazione Release (REL_)
+# Configurazione Release (RELEASE_)
 # ========================================
-REL_PORT=8080
-REL_JRE_IMAGE=eclipse-temurin:21-jre
+# Docker Image
+RELEASE_JRE_IMAGE=eclipse-temurin:21-jre-alpine
+
+# Container Resources
+RELEASE_MEMORY_LIMIT=512m
+RELEASE_MEMORY_RESERVATION=256m
+RELEASE_CPU_LIMIT=1.0
+RELEASE_CPU_RESERVATION=0.5
+
+# Application Port
+RELEASE_PORT=8080
+
+# JVM Configuration
+RELEASE_JVM_XMS=256m
+RELEASE_JVM_XMX=512m
+RELEASE_JVM_METASPACE=128m
+
+# Container User (non-root)
+RELEASE_APP_USER=appuser
+RELEASE_APP_USER_UID=1001
+RELEASE_APP_USER_GID=1001
 
 # ========================================
 # Git (per cmd git push/pull/sync)
