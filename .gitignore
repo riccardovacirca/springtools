@@ -3,6 +3,8 @@
 !archetype/**
 !docs
 !docs/**
+!bin/
+!bin/**
 !install.sh
 !.gitignore
 !README.md
