@@ -1,0 +1,1 @@
+# Secure Keys Directory\n\nThis directory contains private keys and sensitive files.\nFiles in this directory are excluded from git tracking.\n\nExample:\n- private.key (Vonage)\n- certificates\n- API keys

@@ -53,7 +53,7 @@ myproject/
 │   │       ├── db/migration/   # Flyway migrations
 │   │       └── static/         # Static files / Svelte build output
 │   └── test/                   # Tests
-├── gui/                        # Svelte/Vite frontend
+├── svelte/                        # Svelte/Vite frontend
 │   ├── src/
 │   ├── package.json
 │   └── vite.config.js

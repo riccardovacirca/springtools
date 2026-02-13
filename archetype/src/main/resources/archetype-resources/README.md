@@ -16,7 +16,7 @@ git remote add origin https://github.com/YOUR_USERNAME/${artifactId}.git
 git fetch origin main && git reset --hard origin/main
 
 # 3. Configura e avvia
-cp .env.example .env
+# Il file .env viene generato automaticamente da install.sh
 # Modifica .env con i tuoi secrets
 docker exec -it ${artifactId}-dev cmd run
 ```
@@ -37,10 +37,9 @@ cmd release   # Container produzione
 ## Struttura
 
 - `src/` - Spring Boot
-- `gui/` - Svelte frontend
-- `bin/` - Script utility
-- `.toolchain/` - Springtools clonato
-- `.env.example` - Template configurazione (copia in `.env`)
+- `svelte/` - Svelte frontend
+- `.springtools/` - Springtools repository
+- `.env` - Configurazione (generato da install.sh)
 
 ## API
 
