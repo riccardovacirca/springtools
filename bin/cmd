@@ -933,17 +933,25 @@ git_merge() {
 
 # Update git configuration with credentials from .env
 git_update() {
+    local REPO_PATH="$1"
     load_env
 
     [ -z "$GIT_USER" ] && error "GIT_USER not set in .env file"
     [ -z "$GIT_TOKEN" ] && error "GIT_TOKEN not set in .env file"
 
+    # Determine repo directory
+    if [ -z "$REPO_PATH" ]; then
+        GIT_REPO_DIR="$WORKSPACE"
+    elif [[ "$REPO_PATH" = /* ]]; then
+        GIT_REPO_DIR="$REPO_PATH"
+    else
+        GIT_REPO_DIR="$WORKSPACE/$REPO_PATH"
+    fi
+
     info "Updating git configuration..."
 
-    cd "$WORKSPACE"
-
     # Configure git safe directory
-    git config --global --add safe.directory "$WORKSPACE" 2>/dev/null || true
+    git config --global --add safe.directory "$GIT_REPO_DIR" 2>/dev/null || true
 
     # Set git user name globally
     info "  Setting user.name: $GIT_USER"
@@ -956,9 +964,9 @@ git_update() {
     fi
 
     # Update remote URL with credentials (only if .git exists)
-    if [ -d "$WORKSPACE/.git" ]; then
+    if [ -d "$GIT_REPO_DIR/.git" ]; then
         # Get current remote URL to extract repo name
-        CURRENT_REMOTE=$(git config --get remote.origin.url 2>/dev/null || echo "")
+        CURRENT_REMOTE=$(git -C "$GIT_REPO_DIR" config --get remote.origin.url 2>/dev/null || echo "")
 
         if [ -n "$CURRENT_REMOTE" ]; then
             # Extract repo name from current remote URL
@@ -968,7 +976,7 @@ git_update() {
             NEW_REMOTE_URL="https://${GIT_USER}:${GIT_TOKEN}@github.com/${GIT_USER}/${REPO_NAME}.git"
 
             info "  Updating remote URL for repository: $REPO_NAME"
-            git remote set-url origin "$NEW_REMOTE_URL"
+            git -C "$GIT_REPO_DIR" remote set-url origin "$NEW_REMOTE_URL"
             success "Remote URL updated"
         else
             warn "No remote origin found, skipping remote URL update"
@@ -1313,7 +1321,7 @@ case "$1" in
                 git_merge "$BRANCH_NAME" "$REPO_PATH"
                 ;;
             update)
-                git_update
+                git_update "$REPO_PATH"
                 ;;
             *)
                 error "Unknown git command: $GIT_CMD. Use: push, pull, sync, fetch, branch, merge, update"
