@@ -952,7 +952,7 @@ install_claude
 echo "Configurazione comando cmd..."
 docker exec "$DEV_CONTAINER" sh -c "
     chmod +x /usr/src/app/bin/cmd
-    ln -sf /usr/src/app/bin/cmd /usr/local/bin/cmd
+    ln -sf /usr/src/app/.springtools/bin/cmd /usr/local/bin/cmd
 "
 
 echo "Configurazione alias cls..."
